@@ -18,13 +18,15 @@ namespace MemTidy;
 static class StandbyFiles
 {
     public sealed record Report(long StandbyBytes, long FileBytes, long NamedBytes, List<(string Path, long Bytes)> Files,
-                                long[] StandbyByPriority, TimeSpan Elapsed, string? Error);
+                                long[] StandbyByPriority, TimeSpan Elapsed, string? Error, bool UsedDebugPrivilege = false);
 
     const int PageSize = 4096;
     const int SystemSuperfetchInformation = 79;
     const int SuperfetchPfnQuery = 6, SuperfetchMemoryRangesQuery = 17;
     const uint SuperfetchVersion = 45, SuperfetchMagic = 0x6B756843; // 'kuhC'
     const int StatusBufferTooSmall = unchecked((int)0xC0000023), StatusInfoLengthMismatch = unchecked((int)0xC0000004);
+    const int StatusAccessDenied = unchecked((int)0xC0000022), StatusPrivilegeNotHeld = unchecked((int)0xC0000061);
+    const int SeProfileSingleProcessPrivilege = 13, SeDebugPrivilege = 20;
     const int ListStandby = 2, UseFile = 1;
     const int PfnRequestHeader = 192, PfnIdentitySize = 24; // PF_PFN_PRIO_REQUEST.PageData offset, sizeof(MMPFN_IDENTITY)
     const int PfnBatch = 65536;
@@ -56,21 +58,57 @@ static class StandbyFiles
 
     public static bool IsAdmin => new WindowsPrincipal(WindowsIdentity.GetCurrent()).IsInRole(WindowsBuiltInRole.Administrator);
 
+    static readonly object gate = new();
+    static bool debugEnabledHere, debugWasEnabled;
+
+    /// <summary>
+    /// SeDebugPrivilege is a powerful right (open any process): it is switched on only if Windows refuses a step
+    /// without it, and <see cref="Query"/> switches it back off as soon as the query is done.
+    /// </summary>
+    static bool EnableDebugOnce()
+    {
+        if (debugEnabledHere) return false;
+        RtlAdjustPrivilege(SeDebugPrivilege, true, false, out debugWasEnabled);
+        debugEnabledHere = true;
+        return true;
+    }
+
     static int Superfetch(int infoClass, IntPtr data, int length)
     {
-        var info = new SUPERFETCH_INFORMATION { Version = SuperfetchVersion, Magic = SuperfetchMagic, InfoClass = infoClass, Data = data, Length = (uint)length };
-        return NtQuerySystemInformation(SystemSuperfetchInformation, ref info, Marshal.SizeOf<SUPERFETCH_INFORMATION>(), out _);
+        int status = Call();
+        if ((status == StatusAccessDenied || status == StatusPrivilegeNotHeld) && EnableDebugOnce()) status = Call();
+        return status;
+
+        int Call()
+        {
+            var info = new SUPERFETCH_INFORMATION { Version = SuperfetchVersion, Magic = SuperfetchMagic, InfoClass = infoClass, Data = data, Length = (uint)length };
+            return NtQuerySystemInformation(SystemSuperfetchInformation, ref info, Marshal.SizeOf<SUPERFETCH_INFORMATION>(), out _);
+        }
     }
 
     public static Report Query(int top = 500)
     {
+        if (!IsAdmin) return new Report(0, 0, 0, [], new long[8], TimeSpan.Zero, "需要以系統管理員身分執行");
+        lock (gate)
+        {
+            // Only the privilege this query needs, and only while it runs.
+            RtlAdjustPrivilege(SeProfileSingleProcessPrivilege, true, false, out bool profileWasEnabled);
+            debugEnabledHere = false;
+            try { return Collect(top) with { UsedDebugPrivilege = debugEnabledHere }; }
+            finally
+            {
+                RtlAdjustPrivilege(SeProfileSingleProcessPrivilege, profileWasEnabled, false, out _);
+                if (debugEnabledHere) RtlAdjustPrivilege(SeDebugPrivilege, debugWasEnabled, false, out _);
+                debugEnabledHere = false;
+            }
+        }
+    }
+
+    static Report Collect(int top)
+    {
         var sw = System.Diagnostics.Stopwatch.StartNew();
         var byPriority = new long[8];
         Report Fail(string error) => new(0, 0, 0, [], byPriority, sw.Elapsed, error);
-
-        if (!IsAdmin) return Fail("需要以系統管理員身分執行");
-        RtlAdjustPrivilege(13, true, false, out _); // SeProfileSingleProcessPrivilege
-        RtlAdjustPrivilege(20, true, false, out _); // SeDebugPrivilege
 
         // Names first, as Process Hacker does: the FileInfo log maps file keys to paths.
         var names = ReadFileNames(out var nameError);
@@ -182,13 +220,26 @@ static class StandbyFiles
         return null;
     }
 
+    static SafeFileHandle OpenFileInfo()
+    {
+        var h = Open();
+        if (h.IsInvalid && Marshal.GetLastWin32Error() == 5 /* access denied */ && EnableDebugOnce())
+        {
+            h.Dispose();
+            h = Open();
+        }
+        return h;
+
+        static SafeFileHandle Open() => CreateFileW(@"\\?\GLOBALROOT\Device\FileInfo", 0x80 | 0x100000 /* READ_ATTRIBUTES | SYNCHRONIZE */,
+                                                    7, IntPtr.Zero, 3 /* OPEN_EXISTING */, 0, IntPtr.Zero);
+    }
+
     /// <summary>File key → full path, from the FileInfo driver's log of files and volumes it has seen.</summary>
     static Dictionary<ulong, string> ReadFileNames(out string? error)
     {
         error = null;
         var result = new Dictionary<ulong, string>();
-        using var dev = CreateFileW(@"\\?\GLOBALROOT\Device\FileInfo", 0x80 | 0x100000 /* READ_ATTRIBUTES | SYNCHRONIZE */,
-                                    7, IntPtr.Zero, 3 /* OPEN_EXISTING */, 0, IntPtr.Zero);
+        using var dev = OpenFileInfo();
         if (dev.IsInvalid) { error = $"無法開啟 FileInfo（錯誤 {Marshal.GetLastWin32Error()}）"; return result; }
 
         const int outSize = 16 * 1024 * 1024;
@@ -221,13 +272,14 @@ static class StandbyFiles
                 int type = (int)(head & 0x7), size = (int)((head >> 3) & 0x0FFFFFFF);
                 if (size < 16 || off + size > bufferSize) break;
                 int p = off + 16; // union is 8-byte aligned after the 12-byte header
-                if (type == 2) // volume
+                // Each kind is read only if the entry is long enough for every field read below.
+                if (type == 2 && size >= 16 + 42) // volume: key @8, path text from @40
                 {
                     uint key = (uint)Marshal.ReadInt32(outBuf, p + 8);
                     var path = ReadString(outBuf, p + 40, off + size);
                     volumes[key] = ToDosPath(path, dosNames);
                 }
-                else if (type == 0) // file
+                else if (type == 0 && size >= 16 + 30) // file: key @0, volume key @8, name text from @28
                 {
                     ulong key = (ulong)Marshal.ReadInt64(outBuf, p);
                     uint volKey = (uint)Marshal.ReadInt32(outBuf, p + 8);
@@ -281,6 +333,9 @@ static class StandbyFiles
         sb.AppendLine($"MemTidy 快取內容報告  {DateTime.Now:yyyy-MM-dd HH:mm:ss}  （耗時 {r.Elapsed.TotalSeconds:0.0} 秒）");
         if (r.Error != null) sb.AppendLine($"注意：{r.Error}");
         sb.AppendLine($"快取（待命清單）總計 {MemTidy.Format.Bytes(r.StandbyBytes)}，其中檔案 {MemTidy.Format.Bytes(r.FileBytes)}，已對應檔名 {MemTidy.Format.Bytes(r.NamedBytes)}");
+        sb.AppendLine(r.UsedDebugPrivilege
+            ? "權限：SeProfileSingleProcessPrivilege 與 SeDebugPrivilege，查詢完即關閉"
+            : "權限：只用 SeProfileSingleProcessPrivilege，查詢完即關閉（未使用 SeDebugPrivilege）");
         sb.AppendLine("依保留優先順序（7 最優先保留）：" + string.Join("  ", r.StandbyByPriority.Select((b, i) => $"{i}:{MemTidy.Format.Bytes(b)}")));
         sb.AppendLine();
         foreach (var (path, bytes) in r.Files) sb.AppendLine($"{MemTidy.Format.Bytes(bytes),10}  {path}");

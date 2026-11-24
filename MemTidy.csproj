@@ -16,8 +16,11 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <!-- Custom controls are built in code only, never in the WinForms designer -->
     <NoWarn>$(NoWarn);WFO1000</NoWarn>
-    <!-- Regenerate with toolsmake-icon.ps1 -->
+    <!-- Regenerate with tools\make-icon.ps1 -->
     <ApplicationIcon>app.ico</ApplicationIcon>
+    <!-- No .NET startup hooks: an environment variable must never be able to load extra code into MemTidy,
+         least of all into the cache window, which runs as administrator. -->
+    <StartupHookSupport>false</StartupHookSupport>
   </PropertyGroup>
 
 </Project>

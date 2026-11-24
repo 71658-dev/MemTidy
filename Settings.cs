@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace MemTidy;
 
@@ -18,7 +19,7 @@ sealed class Settings
     public bool Paused { get; set; }
 
     /// <summary>True only when no settings file existed yet, i.e. the very first launch.</summary>
-    [System.Text.Json.Serialization.JsonIgnore] public bool FirstRun { get; private set; }
+    [JsonIgnore] public bool FirstRun { get; private set; }
 
     /// <summary>User-editable exclusions. Defaults cover apps that work while in the background (calls, music, recording).</summary>
     public List<string> Exclusions { get; set; } =
@@ -28,27 +29,94 @@ sealed class Settings
         "rtkauduservice64.exe", "brave.exe", "claude.exe", "outlook.exe",
     ];
 
+    /// <summary><see cref="Exclusions"/> normalised to lower-case exe names, built by <see cref="Load"/>.</summary>
+    [JsonIgnore] public HashSet<string> ExcludedNames { get; private set; } = new(StringComparer.OrdinalIgnoreCase);
+
     static string Dir => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MemTidy");
     static string FilePath => Path.Combine(Dir, "settings.json");
-    static readonly JsonSerializerOptions Json = new() { WriteIndented = true };
+    static readonly JsonSerializerOptions Json = new()
+    {
+        WriteIndented = true,
+        // Friendly to hand edits: comments and a trailing comma don't break the file.
+        ReadCommentHandling = JsonCommentHandling.Skip,
+        AllowTrailingCommas = true,
+    };
 
     public static string LogPath => Path.Combine(Dir, "memtidy.log");
 
     public static Settings Load()
     {
-        try
+        Settings s;
+        if (!File.Exists(FilePath))
         {
-            if (File.Exists(FilePath))
-                return JsonSerializer.Deserialize<Settings>(File.ReadAllText(FilePath), Json) ?? new Settings();
+            s = new Settings { FirstRun = true };
+            s.Save();
         }
-        catch (Exception ex) { ActionLog.Add($"設定檔讀取失敗，改用預設值：{ex.Message}"); }
-        var s = new Settings { FirstRun = true };
-        s.Save();
+        else
+        {
+            try
+            {
+                s = JsonSerializer.Deserialize<Settings>(File.ReadAllText(FilePath), Json) ?? new Settings();
+            }
+            catch (Exception ex)
+            {
+                // Leave the file as it is (the user may want to fix it) and run on defaults meanwhile. This is not a
+                // first run either, so a broken file never re-enables start at sign-in behind the user's back.
+                ActionLog.Add($"設定檔格式有誤，本次改用預設值（原檔未修改）：{ex.Message}");
+                s = new Settings();
+            }
+        }
+        s.Validate();
         return s;
+    }
+
+    /// <summary>Brings every value into a sane range, so a typo in settings.json can't stop MemTidy from working.</summary>
+    void Validate()
+    {
+        var corrected = new List<string>();
+        double Real(double v, double min, double max, double fallback, string name)
+        {
+            if (double.IsFinite(v) && v >= min && v <= max) return v;
+            corrected.Add(name);
+            return fallback;
+        }
+        int Whole(int v, int min, int max, int fallback, string name)
+        {
+            if (v >= min && v <= max) return v;
+            corrected.Add(name);
+            return fallback;
+        }
+
+        IdleMinutes = Real(IdleMinutes, 1, 1440, 5, nameof(IdleMinutes));
+        IdleCpuPercent = Real(IdleCpuPercent, 0.1, 50, 1, nameof(IdleCpuPercent));
+        WakeCpuPercent = Real(WakeCpuPercent, IdleCpuPercent, 100, Math.Max(5, IdleCpuPercent), nameof(WakeCpuPercent));
+        QuietSeconds = Whole(QuietSeconds, 10, 3600, 60, nameof(QuietSeconds));
+        TrimCooldownMinutes = Real(TrimCooldownMinutes, 1, 1440, 10, nameof(TrimCooldownMinutes));
+        MaxTrimsPerCycle = Whole(MaxTrimsPerCycle, 0, 50, 5, nameof(MaxTrimsPerCycle));
+        MinTrimWorkingSetMB = Whole(MinTrimWorkingSetMB, 1, 65536, 50, nameof(MinTrimWorkingSetMB));
+        if (Exclusions is null)
+        {
+            Exclusions = new Settings().Exclusions;
+            corrected.Add(nameof(Exclusions));
+        }
+        ExcludedNames = new HashSet<string>(
+            Exclusions.Where(x => !string.IsNullOrWhiteSpace(x) && x.Length <= 260).Select(NormalizeExe),
+            StringComparer.OrdinalIgnoreCase);
+
+        if (corrected.Count > 0) ActionLog.Add($"設定檔有不合理的值，已改用預設：{string.Join("、", corrected)}");
+    }
+
+    public static string NormalizeExe(string name)
+    {
+        name = name.Trim().ToLowerInvariant();
+        return name.EndsWith(".exe") ? name : name + ".exe";
     }
 
     public void Save()
     {
+        // A copy running as administrator never writes into the user's profile: a program running as the user could
+        // redirect the path (links, junctions) and turn the write into an administrator-level one.
+        if (Startup.IsAdmin) return;
         try
         {
             Directory.CreateDirectory(Dir);
@@ -59,8 +127,8 @@ sealed class Settings
 
     public static void OpenFolder()
     {
-        Directory.CreateDirectory(Dir);
-        System.Diagnostics.Process.Start("explorer.exe", Dir);
+        if (!Startup.IsAdmin) Directory.CreateDirectory(Dir);
+        System.Diagnostics.Process.Start(Startup.WindowsTool("explorer.exe"), $"\"{Dir}\"");
     }
 }
 
@@ -72,6 +140,9 @@ static class ActionLog
     static readonly LinkedList<Entry> entries = new();
     const int Max = 200;
 
+    /// <summary>See <see cref="Settings.Save"/>: as administrator the log stays in memory (the panel still shows it).</summary>
+    static readonly bool writeFile = !Startup.IsAdmin;
+
     public static IEnumerable<Entry> Recent => entries;
 
     public static void Add(string text)
@@ -79,6 +150,7 @@ static class ActionLog
         var e = new Entry(DateTime.Now, text);
         entries.AddFirst(e);
         if (entries.Count > Max) entries.RemoveLast();
+        if (!writeFile) return;
         try
         {
             var fi = new FileInfo(Settings.LogPath);

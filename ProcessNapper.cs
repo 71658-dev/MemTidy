@@ -24,6 +24,7 @@ sealed class ProcessNapper
         public double CpuPct;
         public long WorkingSet;
         public bool Owned;            // belongs to the current user (checked once)
+        public bool? Protected;       // security / signing / audio / input software (checked once, when first a candidate)
 
         public bool Napped;
         public DateTime NappedAt;
@@ -36,15 +37,50 @@ sealed class ProcessNapper
 
     public readonly record struct NapView(int Pid, string Name, long WorkingSet, DateTime NappedAt, long TrimmedBytes);
 
+    /// <summary>Never touched, whatever the settings say.</summary>
     static readonly HashSet<string> SystemExclusions = new(StringComparer.OrdinalIgnoreCase)
     {
+        // Windows itself
         "system", "registry", "memory compression", "secure system", "smss.exe", "csrss.exe", "wininit.exe",
         "winlogon.exe", "services.exe", "lsass.exe", "lsaiso.exe", "svchost.exe", "dwm.exe", "explorer.exe",
-        "sihost.exe", "fontdrvhost.exe", "ctfmon.exe", "audiodg.exe", "msmpeng.exe", "nissrv.exe",
-        "searchhost.exe", "searchindexer.exe", "startmenuexperiencehost.exe", "shellexperiencehost.exe",
-        "textinputhost.exe", "applicationframehost.exe", "lockapp.exe", "taskmgr.exe", "conhost.exe",
-        "runtimebroker.exe", "dllhost.exe", "taskhostw.exe", "securityhealthsystray.exe", "securityhealthservice.exe",
+        "sihost.exe", "fontdrvhost.exe", "searchhost.exe", "searchindexer.exe", "startmenuexperiencehost.exe",
+        "shellexperiencehost.exe", "applicationframehost.exe", "lockapp.exe", "logonui.exe", "consent.exe",
+        "credentialuibroker.exe", "userinit.exe", "taskmgr.exe", "conhost.exe", "runtimebroker.exe", "dllhost.exe",
+        "taskhostw.exe", "shellhost.exe", "unsecapp.exe", "memtidy.exe",
+        // Security
+        "msmpeng.exe", "nissrv.exe", "mpcmdrun.exe", "smartscreen.exe", "securityhealthsystray.exe",
+        "securityhealthservice.exe", "voneagentconsoletray.exe", "pccntmon.exe", "secureconnector.exe",
+        // Certificate signing (HiPKI, healthcare certificates)
+        "chksrv.exe", "chtnode.exe", "hcaservisign.exe", "hcaservisignmonitor.exe", "hcaservisignworker.exe",
+        // Audio
+        "audiodg.exe", "rtkauduservice64.exe", "rtkuwp.exe", "igoswserver.exe",
+        // Input methods and accessibility
+        "ctfmon.exe", "textinputhost.exe", "tabtip.exe", "osk.exe", "chsime.exe", "chtime.exe",
+        "asusimeservice.exe", "asusimeentry.exe", "narrator.exe", "magnify.exe", "atbroker.exe", "nvda.exe",
     };
+
+    /// <summary>
+    /// Publishers whose software is never slowed (security, VPN / network access, signing, audio, input, accessibility).
+    /// Matching the publisher and the install folder catches helpers whose names give nothing away, such as HiPKI's
+    /// chtnode.exe, which is a renamed Node.js.
+    /// </summary>
+    static readonly string[] ProtectedPublishers =
+    [
+        "Trend Micro", "ESET", "Kaspersky", "Symantec", "Broadcom", "McAfee", "Sophos", "CrowdStrike", "SentinelOne",
+        "Palo Alto Networks", "Forescout", "Bitdefender", "Fortinet", "Check Point", "Cisco", "Avast", "AVG Technologies",
+        "Malwarebytes", "F-Secure", "WithSecure", "Webroot", "Carbon Black", "AhnLab", "Zscaler", "Netskope", "Citrix",
+        "HCA", "Chunghwa Telecom", "中華電信", "ServiSign",
+        "Realtek", "Waves Audio", "Dolby", "A-Volute", "Nahimic", "Conexant", "Cirrus Logic", "Intelligo",
+        "Synaptics", "ELAN Microelectronics", "Logitech",
+        "NV Access", "Freedom Scientific", "Dolphin Computer Access",
+    ];
+
+    /// <summary>
+    /// Install folders whose programs are never slowed. Programs run from the driver store are hardware-support
+    /// companions installed with a driver (audio processing, touchpad, hotkeys, OEM services).
+    /// </summary>
+    static readonly string[] ProtectedFolders =
+        [@"\HiPKI", @"\Trend Micro\", @"\Windows Defender", @"\ServiSign", @"\Logi\", @"\DriverStore\FileRepository\"];
 
     readonly Dictionary<int, Proc> procs = new();
     readonly Settings settings;
@@ -117,7 +153,7 @@ sealed class ProcessNapper
         {
             if (IsForeground(p)) Wake(p, "回到前景");
             else if (p.CpuPct >= settings.WakeCpuPercent) Wake(p, $"背景有工作（CPU {p.CpuPct:0.#}%）");
-            else if (IsExcluded(p.Name)) Wake(p, "已加入排除清單");
+            else if (IsExcluded(p.Name) || IsProtected(p)) Wake(p, "已加入排除清單");
         }
 
         if (settings.Paused && !manual) return;
@@ -151,15 +187,44 @@ sealed class ProcessNapper
     bool IsIdle(Proc p, DateTime now) =>
         p.Owned && !IsForeground(p) && !IsExcluded(p.Name)
         && now - foreground.LastSeen(p.Name) >= TimeSpan.FromMinutes(settings.IdleMinutes)
-        && now - p.LastActive >= TimeSpan.FromSeconds(settings.QuietSeconds);
+        && now - p.LastActive >= TimeSpan.FromSeconds(settings.QuietSeconds)
+        && !IsProtected(p); // last: it reads the exe's version info, once per process
 
-    bool IsExcluded(string name) =>
-        SystemExclusions.Contains(name) || settings.Exclusions.Any(x => Normalize(x) == name);
+    bool IsExcluded(string name) => SystemExclusions.Contains(name) || settings.ExcludedNames.Contains(name);
 
-    static string Normalize(string name)
+    static bool IsProtected(Proc p)
     {
-        name = name.Trim().ToLowerInvariant();
-        return name.EndsWith(".exe") ? name : name + ".exe";
+        if (p.Protected is bool known) return known;
+        bool result = false;
+        var path = Native.ImagePath(p.Pid);
+        if (path != null)
+        {
+            result = ProtectedFolders.Any(f => path.Contains(f, StringComparison.OrdinalIgnoreCase));
+            if (!result)
+            {
+                try
+                {
+                    var company = System.Diagnostics.FileVersionInfo.GetVersionInfo(path).CompanyName ?? "";
+                    result = ProtectedPublishers.Any(v => company.Contains(v, StringComparison.OrdinalIgnoreCase));
+                }
+                catch { /* unreadable version info: the name lists still apply */ }
+            }
+        }
+        p.Protected = result;
+        return result;
+    }
+
+    /// <summary>
+    /// Opens the process only if it is still the one we sampled. After a process exits, Windows can give its PID to a
+    /// new process, which must never be napped, trimmed or "restored" by mistake.
+    /// </summary>
+    static IntPtr OpenSame(Proc p, uint access)
+    {
+        var h = Native.OpenProcess(access | Native.PROCESS_QUERY_LIMITED_INFORMATION, false, p.Pid);
+        if (h == IntPtr.Zero) return IntPtr.Zero;
+        if (Native.GetProcessTimes(h, out var created, out _, out _, out _) && created == p.Created) return h;
+        Native.CloseHandle(h);
+        return IntPtr.Zero;
     }
 
     /// <summary>Same app as the foreground window, or a child of it (e.g. a browser's renderers, a terminal's shell).</summary>
@@ -184,8 +249,8 @@ sealed class ProcessNapper
 
     void Nap(Proc p)
     {
-        var h = Native.OpenProcess(Native.PROCESS_QUERY_LIMITED_INFORMATION | Native.PROCESS_SET_INFORMATION, false, p.Pid);
-        if (h == IntPtr.Zero) return; // protected or another user's process: leave it alone
+        var h = OpenSame(p, Native.PROCESS_SET_INFORMATION);
+        if (h == IntPtr.Zero) return; // gone, PID reused, protected or another user's process: leave it alone
         try
         {
             var changes = new List<string>();
@@ -241,7 +306,7 @@ sealed class ProcessNapper
 
     void LowerMemPriority(Proc p)
     {
-        var h = Native.OpenProcess(Native.PROCESS_QUERY_LIMITED_INFORMATION | Native.PROCESS_SET_INFORMATION, false, p.Pid);
+        var h = OpenSame(p, Native.PROCESS_SET_INFORMATION);
         if (h == IntPtr.Zero) return;
         try { if (TryLowerMem(h, p)) ActionLog.Add($"記憶體壓力回升，{p.Name} ({p.Pid}) 改回記憶體低優先"); }
         finally { Native.CloseHandle(h); }
@@ -249,7 +314,7 @@ sealed class ProcessNapper
 
     void RestoreMemPriority(Proc p)
     {
-        var h = Native.OpenProcess(Native.PROCESS_QUERY_LIMITED_INFORMATION | Native.PROCESS_SET_INFORMATION, false, p.Pid);
+        var h = OpenSame(p, Native.PROCESS_SET_INFORMATION);
         if (h == IntPtr.Zero) return;
         try
         {
@@ -265,7 +330,7 @@ sealed class ProcessNapper
 
     void Trim(Proc p)
     {
-        var h = Native.OpenProcess(Native.PROCESS_QUERY_LIMITED_INFORMATION | Native.PROCESS_SET_QUOTA, false, p.Pid);
+        var h = OpenSame(p, Native.PROCESS_SET_QUOTA);
         if (h == IntPtr.Zero) return;
         try
         {
@@ -284,8 +349,10 @@ sealed class ProcessNapper
 
     void Wake(Proc p, string reason)
     {
-        var h = Native.OpenProcess(Native.PROCESS_QUERY_LIMITED_INFORMATION | Native.PROCESS_SET_INFORMATION, false, p.Pid);
-        if (h != IntPtr.Zero)
+        // A process that has exited (or whose PID now belongs to another) needs no restoring.
+        var h = OpenSame(p, Native.PROCESS_SET_INFORMATION);
+        bool gone = h == IntPtr.Zero;
+        if (!gone)
         {
             try
             {
@@ -309,7 +376,7 @@ sealed class ProcessNapper
         p.OrigPriority = p.OrigMemPriority = 0;
         p.EcoSet = false;
         p.LastActive = DateTime.Now; // don't nap it again right away
-        ActionLog.Add($"喚醒 {p.Name} ({p.Pid})：{reason}");
+        ActionLog.Add($"喚醒 {p.Name} ({p.Pid})：{reason}{(gone ? "（程式已結束，無需還原）" : "")}");
     }
 
     /// <summary>Undo everything (pause, exit, sign-out).</summary>

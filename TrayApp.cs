@@ -61,7 +61,8 @@ sealed class TrayApp : ApplicationContext
         cycleTimer.Tick += (_, _) => napper.Cycle(pressure.Level, Roomy);
         SystemEvents.SessionEnding += OnSessionEnding;
 
-        ActionLog.Add(forced.HasValue ? $"啟動（模擬壓力：{PressureMonitor.Label(forced.Value)}）" : "啟動");
+        var rights = Startup.IsAdmin ? "（以系統管理員執行：本次不寫入紀錄檔與設定檔）" : "";
+        ActionLog.Add(forced.HasValue ? $"啟動（模擬壓力：{PressureMonitor.Label(forced.Value)}）{rights}" : $"啟動{rights}");
         if (Demo.On) pressure.SeedDemoHistory();
         OnSample();
         napper.Cycle(pressure.Level, Roomy); // baseline CPU counters
@@ -78,6 +79,14 @@ sealed class TrayApp : ApplicationContext
         exitWait = ThreadPool.RegisterWaitForSingleObject(Program.ExitSignal, (_, _) => ui.Post(_ => ExitThread(), null), null, -1, true);
 
         if (showPanel) ShowPanel();
+
+        // Retiring the old administrator task needs the user's go-ahead: ask once the tray is up, not before.
+        if (Startup.LegacyTaskPending)
+        {
+            var ask = new System.Windows.Forms.Timer { Interval = 1500 };
+            ask.Tick += async (_, _) => { ask.Stop(); ask.Dispose(); await Startup.OfferLegacyTaskRemoval(); };
+            ask.Start();
+        }
     }
 
     /// <summary>At least 30% available (cache included: Windows can hand it out instantly).</summary>
@@ -201,15 +210,9 @@ sealed class TrayApp : ApplicationContext
     {
         if (!StandbyFiles.IsAdmin)
         {
-            // Only the cache window runs elevated, as its own short-lived process; the tray copy keeps normal rights.
-            try
-            {
-                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(Environment.ProcessPath!, "--cache-window")
-                {
-                    UseShellExecute = true,
-                    Verb = "runas",
-                });
-            }
+            // Only the cache window runs elevated, as its own short-lived process, from the installed copy when there
+            // is one; the tray copy keeps normal rights.
+            try { Startup.RunElevated("--cache-window")?.Dispose(); }
             catch (System.ComponentModel.Win32Exception) { } // user declined the UAC prompt
             return;
         }

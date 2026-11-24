@@ -92,6 +92,7 @@ sealed class CacheForm : Form
     {
         if (list.SelectedItems.Count == 0) return;
         var path = list.SelectedItems[0].SubItems[1].Text;
-        if (File.Exists(path)) System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{path}\"");
+        // Full path: this window runs as administrator, so a look-alike explorer.exe next to MemTidy must never be picked.
+        if (File.Exists(path)) System.Diagnostics.Process.Start(Startup.WindowsTool("explorer.exe"), $"/select,\"{path}\"");
     }
 }

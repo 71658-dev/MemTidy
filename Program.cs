@@ -23,7 +23,8 @@ static class Program
             return;
         }
 
-        // "--cache-window": just the cache list, started elevated from the panel; no tray, closes with its window.
+        // "--cache-window": just the cache list, started elevated (after the Windows prompt) from the panel.
+        // No tray, no settings or log files, and it ends when its window closes.
         if (args.Contains("--cache-window"))
         {
             ApplicationConfiguration.Initialize();
@@ -31,18 +32,26 @@ static class Program
             return;
         }
 
-        var mutex = Startup.InstanceMutex(out bool running);
-        if (running) return; // already running in the tray
-
-        // Run as administrator by default. Only a plain launch (startup, double-click) does this; test switches stay as they are.
-        if (args.Length == 0 && !Startup.IsAdmin)
+        // "--open-cache": what the panel's cache button does, without the tray: asks Windows to open the cache window
+        // as administrator (from the installed copy when there is one). Used by tests.
+        if (args.Contains("--open-cache"))
         {
-            mutex.Dispose(); // let the elevated copy take the single-instance slot
-            if (Startup.HandOverToElevated()) return;
-            mutex = Startup.InstanceMutex(out running);
-            if (running) return;
+            ApplicationConfiguration.Initialize();
+            try { Startup.RunElevated("--cache-window")?.Dispose(); }
+            catch (System.ComponentModel.Win32Exception) { } // declined at the Windows prompt
+            return;
         }
-        using var _ = mutex;
+
+        // "--remove-legacy-task": started elevated, with the user's consent, only to delete the old administrator task.
+        if (args.Contains("--remove-legacy-task"))
+        {
+            Startup.DeleteLegacyTask();
+            return;
+        }
+
+        // MemTidy itself runs with whatever rights it was started with: normal rights from the Run key or a double-click.
+        using var mutex = Startup.InstanceMutex(out bool running);
+        if (running) return; // already running in the tray
 
         // Test switches: --force-pressure=yellow|red [--force-for=seconds], --idle-minutes=1,
         // --run-seconds=120 (exit cleanly afterwards), --show-panel

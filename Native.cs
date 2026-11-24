@@ -1,6 +1,10 @@
 using System.Runtime.InteropServices;
 using System.Text;
 
+// Every Windows DLL this program calls is loaded from System32 only, never from MemTidy's own folder,
+// where a look-alike DLL could have been put (it matters most for the cache window, which runs as administrator).
+[assembly: DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+
 namespace MemTidy;
 
 /// <summary>Win32 calls used to approximate the macOS memory-management loop.</summary>
@@ -52,7 +56,8 @@ static class Native
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     static extern bool QueryFullProcessImageNameW(IntPtr process, int flags, StringBuilder name, ref int size);
 
-    public static string? ImageName(int pid)
+    /// <summary>Full path of the process's exe, or null if it can't be opened.</summary>
+    public static string? ImagePath(int pid)
     {
         var h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid);
         if (h == IntPtr.Zero) return null;
@@ -60,10 +65,13 @@ static class Native
         {
             var sb = new StringBuilder(1024);
             int size = sb.Capacity;
-            return QueryFullProcessImageNameW(h, 0, sb, ref size) ? Path.GetFileName(sb.ToString()).ToLowerInvariant() : null;
+            return QueryFullProcessImageNameW(h, 0, sb, ref size) ? sb.ToString() : null;
         }
         finally { CloseHandle(h); }
     }
+
+    public static string? ImageName(int pid) =>
+        ImagePath(pid) is string path ? Path.GetFileName(path).ToLowerInvariant() : null;
 
     // ---- Owner check: even when elevated, only touch the current user's own programs ----
     [DllImport("advapi32.dll", SetLastError = true)]
