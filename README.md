@@ -6,6 +6,27 @@
 .\build.ps1            # 產生 dist\MemTidy.exe（需 .NET 10 Desktop Runtime）
 ```
 
+## 畫面
+
+**主面板**：最近 5 分鐘的記憶體使用量（顏色＝壓力）、記憶體分配、目前狀態，以及休眠中的程式與最近動作。
+
+<p>
+  <img src="docs/screenshots/panel-light.png" alt="MemTidy 主面板（淺色）" width="49%">
+  <img src="docs/screenshots/panel-dark.png" alt="MemTidy 主面板（深色）" width="49%">
+</p>
+
+跟隨 Windows 的淺色／深色模式（左：淺色，右：深色）。
+
+**快取內容**：哪些檔案正在快取裡，由大到小（需系統管理員）。
+
+<img src="docs/screenshots/cache.png" alt="快取內容視窗" width="75%">
+
+**系統匣選單**：圖示顏色就是目前的記憶體壓力（綠／黃／紅，暫停時為灰）。
+
+<img src="docs/screenshots/tray-menu.png" alt="系統匣右鍵選單">
+
+> 截圖以 `--demo` 模式拍攝：清單內容是固定的範例資料，記憶體數字為實際值。
+
 ## 運作方式（對照 macOS）
 
 | macOS | MemTidy 在 Windows 上的做法 |
@@ -44,7 +65,7 @@
 MemTidy.exe --force-pressure=red --idle-minutes=0.25 --run-seconds=75
 MemTidy.exe --force-pressure=yellow --force-for=40 --idle-minutes=0.25 --show-panel
 ```
-介面測試：`--theme=dark|light` 強制淺色或深色、`--snapshot=面板.png [--snapshot-after=秒]` 與 `--snapshot-cache=快取.png`、`--snapshot-menu=選單.png` 讓程式自己把視窗存成圖片（螢幕鎖定時也能用）。
+介面測試：`--theme=dark|light` 強制淺色或深色、`--snapshot=面板.png [--snapshot-after=秒]` 與 `--snapshot-cache=快取.png`、`--snapshot-menu=選單.png` 讓程式自己把視窗存成圖片（螢幕鎖定時也能用）；加上 `--demo` 時清單改用範例資料，適合拍 README 截圖。
 
 另外 `MemTidy.exe --cache-report=報告.txt`（需系統管理員）會把快取內容寫成文字檔後結束。
 第一行：模擬紅燈、閒置門檻 15 秒、75 秒後正常結束（會執行還原）。

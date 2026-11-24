@@ -62,6 +62,7 @@ sealed class TrayApp : ApplicationContext
         SystemEvents.SessionEnding += OnSessionEnding;
 
         ActionLog.Add(forced.HasValue ? $"啟動（模擬壓力：{PressureMonitor.Label(forced.Value)}）" : "啟動");
+        if (Demo.On) pressure.SeedDemoHistory();
         OnSample();
         napper.Cycle(pressure.Level, Roomy); // baseline CPU counters
         sampleTimer.Start();

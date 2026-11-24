@@ -63,7 +63,7 @@ sealed class CacheForm : Form
         summary.Line = "讀取中";
         summary.Paragraph = "";
         summary.Invalidate();
-        var r = await Task.Run(() => StandbyFiles.Query());
+        var r = Demo.On ? Demo.Cache() : await Task.Run(() => StandbyFiles.Query());
         if (IsDisposed) return;
         refresh.Enabled = true;
 

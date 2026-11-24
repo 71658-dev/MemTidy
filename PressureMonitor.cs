@@ -44,6 +44,22 @@ sealed class PressureMonitor : IDisposable
     public double AvailPct => 100 - UsedPct;
     public double CommitPct => Status.ullTotalPageFile == 0 ? 0 : 100.0 * (Status.ullTotalPageFile - Status.ullAvailPageFile) / Status.ullTotalPageFile;
 
+    /// <summary>Demo mode: five minutes of history shaped like the design (a climb through yellow to red and back).</summary>
+    public void SeedDemoHistory()
+    {
+        history.Clear();
+        int n = HistorySeconds / SampleSeconds;
+        var now = DateTime.Now;
+        for (int i = 0; i < n - 1; i++)
+        {
+            double v = 63 + 2 * Math.Sin(i / 9.0) + Math.Sin(i / 3.7);
+            if (i >= 58 && i <= 104) v += 30 * Math.Sin(Math.PI * (i - 58) / 46);
+            v = Math.Min(v, 97);
+            var level = v >= 92 ? Pressure.Red : v >= 80 ? Pressure.Yellow : Pressure.Green;
+            history.Enqueue(new MemSample(now.AddSeconds(-(n - 1 - i) * SampleSeconds), v, 50, level));
+        }
+    }
+
     public void Sample()
     {
         var m = new Native.MEMORYSTATUSEX { dwLength = (uint)Marshal.SizeOf<Native.MEMORYSTATUSEX>() };

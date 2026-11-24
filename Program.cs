@@ -57,6 +57,7 @@ static class Program
             if (a.StartsWith("--run-seconds=") && int.TryParse(a[14..], out var r)) runSeconds = r;
             if (a.StartsWith("--force-for=") && int.TryParse(a[12..], out var f)) forceSeconds = f;
             if (a == "--theme=dark" || a == "--theme=light") Theme.Forced = a == "--theme=dark";
+            if (a == "--demo") Demo.On = true;
         }
 
         ApplicationConfiguration.Initialize();

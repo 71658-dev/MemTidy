@@ -96,7 +96,7 @@ sealed class StatusForm : Form
             ("可用（含快取）", Format.Bytes(avail)),
             ("認可量", $"{Format.Bytes(commit).Replace(" GB", "")} / {Format.Bytes(limit)}（{pressure.CommitPct:0}%）"),
             ("系統壓縮", pressure.CompressedBytes < 0 ? "—（需系統管理員）" : Format.Bytes(pressure.CompressedBytes)),
-            ("本次累計釋出", Format.Bytes(napper.TotalTrimmed)),
+            ("本次累計釋出", Format.Bytes(Demo.On ? Demo.TotalTrimmed : napper.TotalTrimmed)),
         ];
         card.Invalidate();
         graph.Invalidate();
@@ -106,11 +106,23 @@ sealed class StatusForm : Form
         else
             bar.Set(total, [(total - avail, "程式使用中", q => q.Accent), (avail, "可用（含快取）", q => q.Green)]);
 
-        var naps = napper.Napped.ToList();
+        var naps = Demo.On
+            ? Demo.Naps.Select(d => new ProcessNapper.NapView(d.Pid, d.Name, d.WorkingSet, DateTime.Now - d.Napped, d.Trimmed)).ToList()
+            : napper.Napped.ToList();
         napHeader.Title = $"休眠中的背景程式（{naps.Count}）";
         napList.SetRows(naps.Select(n => new ListRow(
             [n.Name, n.Pid.ToString(), Format.Bytes(n.WorkingSet), Format.Ago(n.NappedAt), n.TrimmedBytes > 0 ? Format.Bytes(n.TrimmedBytes) : "—"])));
 
+        if (Demo.On)
+        {
+            if (lastLogTop == default)
+            {
+                lastLogTop = DateTime.Now;
+                var dp = Theme.Current;
+                logList.SetRows(Demo.Log.Select(d => LogRow(new ActionLog.Entry(DateTime.Now - d.Ago, d.Text), dp)));
+            }
+            return;
+        }
         var first = ActionLog.Recent.FirstOrDefault();
         if (first.Time != lastLogTop)
         {
