@@ -1,0 +1,95 @@
+namespace MemTidy;
+
+static class Program
+{
+    /// <summary>Set by "MemTidy.exe --exit" to make the running instance quit cleanly.</summary>
+    static EventWaitHandle? exitSignal;
+    public static EventWaitHandle ExitSignal => exitSignal ??= Startup.ExitEvent();
+
+    [STAThread]
+    static void Main(string[] args)
+    {
+        if (args.Contains("--exit"))
+        {
+            ExitSignal.Set();
+            return;
+        }
+
+        // "--cache-report=file.txt": write which files are in the cache and exit (needs admin). Runs beside the tray copy.
+        var report = args.FirstOrDefault(a => a.StartsWith("--cache-report="));
+        if (report != null)
+        {
+            File.WriteAllText(report[15..], StandbyFiles.Format(StandbyFiles.Query()), System.Text.Encoding.UTF8);
+            return;
+        }
+
+        // "--cache-window": just the cache list, started elevated from the panel; no tray, closes with its window.
+        if (args.Contains("--cache-window"))
+        {
+            ApplicationConfiguration.Initialize();
+            Application.Run(new CacheForm(TrayApp.AppIcon));
+            return;
+        }
+
+        var mutex = Startup.InstanceMutex(out bool running);
+        if (running) return; // already running in the tray
+
+        // Run as administrator by default. Only a plain launch (startup, double-click) does this; test switches stay as they are.
+        if (args.Length == 0 && !Startup.IsAdmin)
+        {
+            mutex.Dispose(); // let the elevated copy take the single-instance slot
+            if (Startup.HandOverToElevated()) return;
+            mutex = Startup.InstanceMutex(out running);
+            if (running) return;
+        }
+        using var _ = mutex;
+
+        // Test switches: --force-pressure=yellow|red [--force-for=seconds], --idle-minutes=1,
+        // --run-seconds=120 (exit cleanly afterwards), --show-panel
+        Pressure? forced = null;
+        double? idleMinutes = null;
+        int runSeconds = 0, forceSeconds = 0;
+        bool showPanel = args.Contains("--show-panel");
+        foreach (var a in args)
+        {
+            if (a.StartsWith("--force-pressure=") && Enum.TryParse<Pressure>(a[17..], true, out var p)) forced = p;
+            if (a.StartsWith("--idle-minutes=") && double.TryParse(a[15..], out var m)) idleMinutes = m;
+            if (a.StartsWith("--run-seconds=") && int.TryParse(a[14..], out var r)) runSeconds = r;
+            if (a.StartsWith("--force-for=") && int.TryParse(a[12..], out var f)) forceSeconds = f;
+            if (a == "--theme=dark" || a == "--theme=light") Theme.Forced = a == "--theme=dark";
+        }
+
+        ApplicationConfiguration.Initialize();
+        // A UI bug must never take the process down: that would leave napped apps slowed until they restart.
+        Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
+        Application.ThreadException += (_, e) => ActionLog.Add($"介面錯誤（已略過）：{e.Exception.GetType().Name}: {e.Exception.Message}");
+        var settings = Settings.Load();
+        if (args.Length == 0) Startup.Ensure(settings.FirstRun); // test runs never touch the startup entry
+        if (idleMinutes.HasValue) // not saved
+        {
+            settings.IdleMinutes = idleMinutes.Value;
+            settings.QuietSeconds = Math.Min(settings.QuietSeconds, (int)(idleMinutes.Value * 60));
+        }
+        var app = new TrayApp(settings, forced, forceSeconds, showPanel);
+        // --snapshot=file.png [--snapshot-after=seconds]: render the panel to an image (testing)
+        var snapshot = args.FirstOrDefault(a => a.StartsWith("--snapshot="));
+        if (snapshot != null)
+        {
+            int after = args.FirstOrDefault(a => a.StartsWith("--snapshot-after=")) is string s && int.TryParse(s[17..], out var sec) ? sec : 3;
+            var st = new System.Windows.Forms.Timer { Interval = after * 1000 };
+            st.Tick += (_, _) => { st.Stop(); app.SnapshotPanel(snapshot[11..]); };
+            st.Start();
+        }
+        if (args.FirstOrDefault(a => a.StartsWith("--snapshot-menu=")) is string menuShot)
+            app.SnapshotMenu(menuShot[16..]);
+        if (args.FirstOrDefault(a => a.StartsWith("--snapshot-cache=")) is string cacheShot)
+            app.SnapshotCache(cacheShot[17..]);
+        if (runSeconds > 0)
+        {
+            var t = new System.Windows.Forms.Timer { Interval = runSeconds * 1000 };
+            t.Tick += (_, _) => { t.Stop(); app.ExitThread(); };
+            t.Start();
+        }
+        Application.Run(app);
+    }
+}
