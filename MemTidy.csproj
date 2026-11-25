@@ -8,6 +8,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>MemTidy</AssemblyName>
     <Product>記憶體整理</Product>
+    <Version>1.0.0</Version>
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
     <!-- A resident tool should itself stay small: workstation GC without the background GC thread -->
     <ServerGarbageCollection>false</ServerGarbageCollection>
