@@ -9,7 +9,7 @@ sealed class StatusForm : Form
     readonly PressureMonitor pressure;
     readonly ProcessNapper napper;
     readonly Settings settings;
-    readonly MemoryBreakdown breakdown = new();
+    readonly MemoryBreakdown breakdown;
     readonly GraphPanel graph;
     readonly BreakdownBar bar = new();
     readonly StatusCard card = new() { Margin = new Padding(0, 16, 0, 0) };
@@ -17,12 +17,15 @@ sealed class StatusForm : Form
     readonly ZebraList napList = new(("程式", 200, Cell.Strong), ("PID", 80, Cell.Muted), ("目前占用", 100, Cell.Text), ("已休眠", 100, Cell.Muted), ("累計釋出", 100, Cell.Text));
     readonly ZebraList logList = new(("時間", 90, Cell.Muted), ("類型", 90, Cell.Dot), ("動作", 400, Cell.Text));
     DateTime lastLogTop;
+    string? lastNaps;
 
-    public StatusForm(PressureMonitor pressure, ProcessNapper napper, Settings settings, Icon icon, Action tidyNow, Action showCache)
+    public StatusForm(PressureMonitor pressure, ProcessNapper napper, Settings settings, MemoryBreakdown breakdown, Icon icon, Action tidyNow, Action showCache)
     {
         this.pressure = pressure;
         this.napper = napper;
         this.settings = settings;
+        this.breakdown = breakdown; // owned by the tray: opening its counters takes a second or more
+        SuspendLayout();
         Theme.Refresh();
         var p = Theme.Current;
 
@@ -36,7 +39,6 @@ sealed class StatusForm : Form
         ClientSize = new Size(780, 900);
         MinimumSize = new Size(660, 760);
         StartPosition = FormStartPosition.CenterScreen;
-        FormClosed += (_, _) => breakdown.Dispose();
 
         graph = new GraphPanel(pressure);
         var tidy = new MacButton("立即整理閒置程式") { Primary = true, Behind = q => q.Fill };
@@ -50,6 +52,7 @@ sealed class StatusForm : Form
         {
             Dock = DockStyle.Fill, ColumnCount = 1, Padding = new Padding(24, 12, 24, 20), BackColor = p.Window,
         };
+        layout.SuspendLayout();
         void Row(Control c, SizeType type, float size)
         {
             layout.RowStyles.Add(new RowStyle(type, size));
@@ -68,6 +71,9 @@ sealed class StatusForm : Form
         Row(new SectionHeader("最近動作"), SizeType.Absolute, 40);
         Row(new ListFrame(logList), SizeType.Percent, 60);
         Controls.Add(layout);
+        layout.ResumeLayout(false);
+        ResumeLayout(false);
+        PerformLayout();
     }
 
     protected override void OnHandleCreated(EventArgs e)
@@ -110,8 +116,15 @@ sealed class StatusForm : Form
             ? Demo.Naps.Select(d => new ProcessNapper.NapView(d.Pid, d.Name, d.WorkingSet, DateTime.Now - d.Napped, d.Trimmed)).ToList()
             : napper.Napped.ToList();
         napHeader.Title = $"休眠中的背景程式（{naps.Count}）";
-        napList.SetRows(naps.Select(n => new ListRow(
-            [n.Name, n.Pid.ToString(), Format.Bytes(n.WorkingSet), Format.Ago(n.NappedAt), n.TrimmedBytes > 0 ? Format.Bytes(n.TrimmedBytes) : "—"])));
+        var napRows = naps.Select(n => new ListRow(
+            [n.Name, n.Pid.ToString(), Format.Bytes(n.WorkingSet), Format.Ago(n.NappedAt), n.TrimmedBytes > 0 ? Format.Bytes(n.TrimmedBytes) : "—"])).ToList();
+        // Every two seconds: rebuild the rows only when what they show changed (keeps the selection, no flicker).
+        var napKey = string.Join('\n', napRows.Select(r => string.Join('\t', r.Cells)));
+        if (napKey != lastNaps)
+        {
+            lastNaps = napKey;
+            napList.SetRows(napRows);
+        }
 
         if (Demo.On)
         {

@@ -14,6 +14,8 @@ sealed class TrayApp : ApplicationContext
     readonly PressureMonitor pressure;
     readonly ForegroundWatcher foreground;
     readonly ProcessNapper napper;
+    readonly MemoryBreakdown breakdown = new();
+    readonly SynchronizationContext ui;
     readonly NotifyIcon tray;
     readonly Dictionary<string, Icon> icons = new();
     readonly System.Windows.Forms.Timer sampleTimer = new() { Interval = PressureMonitor.SampleSeconds * 1000 };
@@ -55,6 +57,8 @@ sealed class TrayApp : ApplicationContext
         menu.Opening += (_, _) => { Theme.Refresh(); Theme.RoundCorners(menu.Handle); };
 
         tray = new NotifyIcon { ContextMenuStrip = menu, Visible = true };
+        // WinForms installs its UI context with the first control (the menu above): capture it only now.
+        ui = SynchronizationContext.Current!;
         tray.MouseClick += (_, e) => { if (e.Button == MouseButtons.Left) ShowPanel(); };
 
         sampleTimer.Tick += (_, _) => OnSample();
@@ -63,19 +67,20 @@ sealed class TrayApp : ApplicationContext
 
         var rights = Startup.IsAdmin ? "（以系統管理員執行：本次不寫入紀錄檔與設定檔）" : "";
         ActionLog.Add(forced.HasValue ? $"啟動（模擬壓力：{PressureMonitor.Label(forced.Value)}）{rights}" : $"啟動{rights}");
-        if (Demo.On) pressure.SeedDemoHistory();
         OnSample();
+        if (Demo.On) pressure.SeedDemoHistory(); // after the first reading, so the demo graph ends at the real usage
         napper.Cycle(pressure.Level, Roomy); // baseline CPU counters
         sampleTimer.Start();
         cycleTimer.Start();
 
         // Startup pages (JIT, WinForms init) are never needed again: hand them back once settled.
         var settle = new System.Windows.Forms.Timer { Interval = 5000 };
-        settle.Tick += (_, _) => { settle.Dispose(); TrimSelf(); };
+        // The panel's memory breakdown counters take a second or more to open: do that now, off the UI thread, so the
+        // panel opens at once. Trim only once they are open, so their pages go too.
+        settle.Tick += (_, _) => { settle.Dispose(); WarmBreakdown().ContinueWith(_ => ui.Post(_ => TrimSelf(), null)); };
         settle.Start();
 
         // "MemTidy.exe --exit" from a script or build.ps1 asks this instance to quit cleanly (restoring every app).
-        var ui = SynchronizationContext.Current!;
         exitWait = ThreadPool.RegisterWaitForSingleObject(Program.ExitSignal, (_, _) => ui.Post(_ => ExitThread(), null), null, -1, true);
 
         if (showPanel) ShowPanel();
@@ -94,6 +99,9 @@ sealed class TrayApp : ApplicationContext
 
     static Icon? appIcon;
     public static Icon AppIcon => appIcon ??= Icon.ExtractAssociatedIcon(Environment.ProcessPath!) ?? SystemIcons.Application;
+
+    /// <summary>Opens the breakdown counters in the background (once); an open panel shows them as soon as they are ready.</summary>
+    Task WarmBreakdown() => breakdown.WarmUp(() => ui.Post(_ => panel?.RefreshView(), null));
 
     static void TrimSelf()
     {
@@ -230,15 +238,17 @@ sealed class TrayApp : ApplicationContext
     {
         if (panel == null)
         {
-            panel = new StatusForm(pressure, napper, settings, AppIcon, TidyNow, ShowCache);
+            WarmBreakdown(); // opened before the 5 s settle: start the counters now
+            panel = new StatusForm(pressure, napper, settings, breakdown, AppIcon, TidyNow, ShowCache);
             panel.FormClosed += (_, _) =>
             {
                 panel = null;
                 TrimSelf(); // a resident tool should not keep UI pages around
             };
+            panel.RefreshView(); // fill before the first paint, not right after it
             panel.Show();
         }
-        panel.RefreshView();
+        else panel.RefreshView();
         if (panel.WindowState == FormWindowState.Minimized) panel.WindowState = FormWindowState.Normal;
         panel.Activate();
     }
@@ -314,6 +324,7 @@ sealed class TrayApp : ApplicationContext
         tray.Dispose();
         foreground.Dispose();
         pressure.Dispose();
+        breakdown.Dispose();
         base.ExitThreadCore();
     }
 }

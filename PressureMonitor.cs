@@ -44,19 +44,24 @@ sealed class PressureMonitor : IDisposable
     public double AvailPct => 100 - UsedPct;
     public double CommitPct => Status.ullTotalPageFile == 0 ? 0 : 100.0 * (Status.ullTotalPageFile - Status.ullAvailPageFile) / Status.ullTotalPageFile;
 
-    /// <summary>Demo mode: five minutes of history shaped like the design (a climb through yellow to red and back).</summary>
+    /// <summary>
+    /// Demo mode: five minutes of history shaped like the design (a climb through yellow to red and back), shifted so
+    /// it ends exactly at the real usage the panel shows next to it. Called after the first reading; in demo mode
+    /// the graph then stays as it is.
+    /// </summary>
     public void SeedDemoHistory()
     {
         history.Clear();
         int n = HistorySeconds / SampleSeconds;
+        static double Wiggle(int i) => 2 * Math.Sin(i / 9.0) + Math.Sin(i / 3.7);
+        double usage = UsedPct, peak = Math.Max(0, 94 - usage); // the climb tops out around 94% (red) from any start
         var now = DateTime.Now;
-        for (int i = 0; i < n - 1; i++)
+        for (int i = 0; i < n; i++)
         {
-            double v = 63 + 2 * Math.Sin(i / 9.0) + Math.Sin(i / 3.7);
-            if (i >= 58 && i <= 104) v += 30 * Math.Sin(Math.PI * (i - 58) / 46);
-            v = Math.Min(v, 97);
+            double bump = i >= 58 && i <= 104 ? peak * Math.Sin(Math.PI * (i - 58) / 46) : 0;
+            double v = Math.Clamp(usage + Wiggle(i) - Wiggle(n - 1) + bump, 5, 97);
             var level = v >= 92 ? Pressure.Red : v >= 80 ? Pressure.Yellow : Pressure.Green;
-            history.Enqueue(new MemSample(now.AddSeconds(-(n - 1 - i) * SampleSeconds), v, 50, level));
+            history.Enqueue(new MemSample(now.AddSeconds(-(n - 1 - i) * SampleSeconds), v, CommitPct, level));
         }
     }
 
@@ -71,6 +76,7 @@ sealed class PressureMonitor : IDisposable
         Level = forced ?? Classify(Level, AvailPct, CommitPct, KernelLowMemory);
         CompressedBytes = ReadCompressionStore();
 
+        if (Demo.On) return; // the demo graph stays as seeded
         history.Enqueue(new MemSample(DateTime.Now, UsedPct, CommitPct, Level));
         while (history.Count > HistorySeconds / SampleSeconds) history.Dequeue();
     }

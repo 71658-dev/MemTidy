@@ -1,4 +1,5 @@
-# Builds dist\MemTidy.exe (single file, needs the .NET 10 Desktop Runtime).
+# Builds dist\MemTidy.exe (single file, needs the .NET 10 Desktop Runtime). ReadyToRun: precompiled, so the first
+# panel open does not wait for the JIT.
 # To install it, or update the installed copy in C:\Program Files\MemTidy, run .\install.ps1 afterwards.
 $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
@@ -15,8 +16,20 @@ if ($fromDist) {
     }
 }
 
-dotnet publish MemTidy.csproj -c Release -r win-x64 --self-contained false `
-    -p:PublishSingleFile=true -p:DebugType=none -o dist
+# The .NET CLI sends usage telemetry to Microsoft unless opted out, and checks nuget.org for workload updates about
+# once a day: turn both off for this build, and leave the calling session's own settings as they were.
+$savedOptOut = $env:DOTNET_CLI_TELEMETRY_OPTOUT
+$savedWorkloadCheck = $env:DOTNET_CLI_WORKLOAD_UPDATE_NOTIFY_DISABLE
+$env:DOTNET_CLI_TELEMETRY_OPTOUT = '1'
+$env:DOTNET_CLI_WORKLOAD_UPDATE_NOTIFY_DISABLE = 'true'
+try {
+    dotnet publish MemTidy.csproj -c Release -r win-x64 --self-contained false `
+        -p:PublishSingleFile=true -p:PublishReadyToRun=true -p:DebugType=none -o dist
+}
+finally {
+    $env:DOTNET_CLI_TELEMETRY_OPTOUT = $savedOptOut
+    $env:DOTNET_CLI_WORKLOAD_UPDATE_NOTIFY_DISABLE = $savedWorkloadCheck
+}
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 if ($fromDist) { Start-Process -FilePath $dist }

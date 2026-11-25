@@ -5,7 +5,9 @@ namespace MemTidy;
 /// <summary>
 /// Splits RAM the way Activity Monitor does: what programs use, what the system keeps as cache
 /// (standby list: recently used files and apps, released instantly when needed), and what is truly empty.
-/// Read through performance counters, which need no admin rights. Only alive while the panel is open.
+/// Read through performance counters, which need no admin rights.
+/// Opening the PDH query loads the counter registry and perflib and takes a second or more, so the tray opens it once
+/// on a background thread (<see cref="WarmUp"/>) and keeps it; until it is ready <see cref="Read"/> returns null.
 /// </summary>
 sealed class MemoryBreakdown : IDisposable
 {
@@ -33,27 +35,42 @@ sealed class MemoryBreakdown : IDisposable
     [DllImport("pdh.dll")]
     static extern uint PdhCloseQuery(IntPtr query);
 
-    readonly IntPtr query;
+    IntPtr query;
     readonly IntPtr[] standby = new IntPtr[3];
-    readonly IntPtr free;
-    readonly bool ok;
+    IntPtr free;
+    volatile bool ok, disposed;
+    Task? warming;
 
-    public MemoryBreakdown()
+    /// <summary>Opens the query on a thread-pool thread (once); <paramref name="ready"/> runs there when it is usable.</summary>
+    public Task WarmUp(Action? ready = null) => warming ??= Task.Run(() =>
     {
-        if (PdhOpenQueryW(null, IntPtr.Zero, out query) != 0) return;
+        Open();
+        if (ok) ready?.Invoke();
+    });
+
+    void Open()
+    {
+        if (PdhOpenQueryW(null, IntPtr.Zero, out var q) != 0) return;
         string[] standbyPaths =
         [
             @"\Memory\Standby Cache Core Bytes",
             @"\Memory\Standby Cache Normal Priority Bytes",
             @"\Memory\Standby Cache Reserve Bytes",
         ];
-        ok = true;
+        bool good = true;
         for (int i = 0; i < standbyPaths.Length; i++)
-            ok &= PdhAddEnglishCounterW(query, standbyPaths[i], IntPtr.Zero, out standby[i]) == 0;
-        ok &= PdhAddEnglishCounterW(query, @"\Memory\Free & Zero Page List Bytes", IntPtr.Zero, out free) == 0;
+            good &= PdhAddEnglishCounterW(q, standbyPaths[i], IntPtr.Zero, out standby[i]) == 0;
+        good &= PdhAddEnglishCounterW(q, @"\Memory\Free & Zero Page List Bytes", IntPtr.Zero, out free) == 0;
+        good &= PdhCollectQueryData(q) == 0; // the first collection is slow too: do it here, not on the UI thread
+        lock (this)
+        {
+            query = q;
+            if (disposed) { PdhCloseQuery(q); query = IntPtr.Zero; return; }
+            ok = good;
+        }
     }
 
-    /// <summary>Returns (cache, empty) in bytes, or null if the counters are unavailable.</summary>
+    /// <summary>Returns (cache, empty) in bytes, or null if the counters are unavailable or not warmed up yet.</summary>
     public (long Cache, long Empty)? Read()
     {
         if (!ok || PdhCollectQueryData(query) != 0) return null;
@@ -69,6 +86,12 @@ sealed class MemoryBreakdown : IDisposable
 
     public void Dispose()
     {
-        if (query != IntPtr.Zero) PdhCloseQuery(query);
+        lock (this)
+        {
+            disposed = true;
+            ok = false;
+            if (query != IntPtr.Zero) PdhCloseQuery(query);
+            query = IntPtr.Zero;
+        }
     }
 }

@@ -428,6 +428,8 @@ sealed class ZebraList : ListView
         }
         base.WndProc(ref m);
         if (m.Msg != 0x000F /* WM_PAINT */ || !IsHandleCreated) return;
+        // Rows taller than the list leave no empty area: skip the item-rect query and the extra Graphics on every paint.
+        if (Items.Count * (SmallImageList?.ImageSize.Height ?? Si(26)) >= ClientSize.Height) return;
         int top;
         try { top = Items.Count > 0 ? Items[^1].Bounds.Bottom : HeaderHeight(); }
         catch (ArgumentOutOfRangeException) { return; } // rows are being replaced; the next paint covers it
