@@ -95,6 +95,8 @@ static class Program
         }
         if (args.FirstOrDefault(a => a.StartsWith("--snapshot-menu=")) is string menuShot)
             app.SnapshotMenu(menuShot[16..]);
+        if (args.FirstOrDefault(a => a.StartsWith("--snapshot-exclusions=")) is string exclShot)
+            app.SnapshotExclusions(exclShot[22..], args.FirstOrDefault(a => a.StartsWith("--snapshot-add="))?[15..]);
         if (args.FirstOrDefault(a => a.StartsWith("--snapshot-cache=")) is string cacheShot)
             app.SnapshotCache(cacheShot[17..]);
         if (runSeconds > 0)

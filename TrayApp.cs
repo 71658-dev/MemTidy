@@ -43,6 +43,7 @@ sealed class TrayApp : ApplicationContext
         var menu = new ContextMenuStrip();
         menu.Items.Add(new ToolStripMenuItem("開啟面板", null, (_, _) => ShowPanel()) { Font = new Font(menu.Font, FontStyle.Bold) });
         menu.Items.Add("立即整理閒置程式", null, (_, _) => TidyNow());
+        menu.Items.Add("排除清單…", null, (_, _) => ShowExclusions());
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(pauseItem);
         menu.Items.Add(startupItem);
@@ -76,6 +77,12 @@ sealed class TrayApp : ApplicationContext
         sampleTimer.Tick += (_, _) => OnSample();
         cycleTimer.Tick += (_, _) => napper.Cycle(pressure.Level, Roomy);
         SystemEvents.SessionEnding += OnSessionEnding;
+        // A program just excluded is woken now, not at the next 10-second cycle.
+        settings.ExclusionsChanged += () =>
+        {
+            napper.Cycle(pressure.Level, Roomy);
+            panel?.RefreshView();
+        };
 
         var rights = Startup.IsAdmin ? "（以系統管理員執行：本次不寫入紀錄檔與設定檔）" : "";
         ActionLog.Add(forced.HasValue ? $"啟動（模擬壓力：{PressureMonitor.Label(forced.Value)}）{rights}" : $"啟動{rights}");
@@ -138,6 +145,7 @@ sealed class TrayApp : ApplicationContext
                    $"已用 {pressure.UsedPct:0}%　休眠中 {napper.NappedCount} 個程式";
         tray.Text = text.Length > 127 ? text[..127] : text;
         panel?.RefreshView();
+        exclusions?.RefreshView();
     }
 
     void TidyNow()
@@ -189,6 +197,42 @@ sealed class TrayApp : ApplicationContext
             cacheForm.Close();
             ShowCache();
         }
+        if (exclusions != null)
+        {
+            var bounds = exclusions.Bounds;
+            exclusions.Close();
+            ShowExclusions();
+            exclusions!.Bounds = bounds;
+        }
+    }
+
+    ExclusionsForm? exclusions;
+
+    void ShowExclusions()
+    {
+        if (exclusions == null)
+        {
+            exclusions = new ExclusionsForm(settings, napper, AppIcon);
+            exclusions.FormClosed += (_, _) => { exclusions = null; TrimSelf(); };
+            exclusions.Show();
+        }
+        if (exclusions.WindowState == FormWindowState.Minimized) exclusions.WindowState = FormWindowState.Normal;
+        exclusions.Activate();
+    }
+
+    /// <summary>Test switch --snapshot-exclusions=file.png: opens the exclusions window and captures it 2 s later.</summary>
+    public void SnapshotExclusions(string path, string? addPath)
+    {
+        ShowExclusions();
+        var add = addPath != null ? exclusions!.ShowAdd() : null;
+        var t = new System.Windows.Forms.Timer { Interval = 2000 };
+        t.Tick += (_, _) =>
+        {
+            t.Stop();
+            Snapshot(exclusions!, path);
+            if (add != null) Snapshot(add, addPath!);
+        };
+        t.Start();
     }
 
     CacheForm? cacheForm;
@@ -275,7 +319,7 @@ sealed class TrayApp : ApplicationContext
         if (panel == null)
         {
             WarmBreakdown(); // opened before the 5 s settle: start the counters now
-            panel = new StatusForm(pressure, napper, settings, breakdown, AppIcon, TidyNow, ShowCache);
+            panel = new StatusForm(pressure, napper, settings, breakdown, AppIcon, TidyNow, ShowCache, ShowExclusions);
             panel.FormClosed += (_, _) =>
             {
                 panel = null;
@@ -356,6 +400,7 @@ sealed class TrayApp : ApplicationContext
         exitWait.Unregister(null);
         panel?.Close();
         cacheForm?.Close();
+        exclusions?.Close();
         tray.Visible = false;
         tray.Dispose();
         foreground.Dispose();

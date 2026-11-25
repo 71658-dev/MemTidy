@@ -13,13 +13,13 @@ sealed class StatusForm : Form
     readonly GraphPanel graph;
     readonly BreakdownBar bar = new();
     readonly StatusCard card = new() { Margin = new Padding(0, 16, 0, 0) };
-    readonly SectionHeader napHeader = new("休眠中的背景程式") { Note = "切回該程式即自動恢復" };
+    readonly SectionHeader napHeader = new("休眠中的背景程式") { Note = "切回該程式即自動恢復 · 按右鍵可加入排除清單" };
     readonly ZebraList napList = new(("程式", 200, Cell.Strong), ("PID", 80, Cell.Muted), ("目前占用", 100, Cell.Text), ("已休眠", 100, Cell.Muted), ("累計釋出", 100, Cell.Text));
     readonly ZebraList logList = new(("時間", 90, Cell.Muted), ("類型", 90, Cell.Dot), ("動作", 400, Cell.Text));
     DateTime lastLogTop;
     string? lastNaps;
 
-    public StatusForm(PressureMonitor pressure, ProcessNapper napper, Settings settings, MemoryBreakdown breakdown, Icon icon, Action tidyNow, Action showCache)
+    public StatusForm(PressureMonitor pressure, ProcessNapper napper, Settings settings, MemoryBreakdown breakdown, Icon icon, Action tidyNow, Action showCache, Action showExclusions)
     {
         this.pressure = pressure;
         this.napper = napper;
@@ -45,8 +45,26 @@ sealed class StatusForm : Form
         tidy.Click += (_, _) => tidyNow();
         var cache = new MacButton(StandbyFiles.IsAdmin ? "查看快取內容" : "查看快取內容（需管理員）") { Behind = q => q.Fill };
         cache.Click += (_, _) => showCache();
+        var exclusions = new MacButton("排除清單…") { Behind = q => q.Fill };
+        exclusions.Click += (_, _) => showExclusions();
         card.AddButton(tidy);
         card.AddButton(cache);
+        card.AddButton(exclusions);
+
+        // Right-click a napping app: keep it out of napping from now on.
+        var napMenu = new ContextMenuStrip { Renderer = new MenuRenderer(), Font = Theme.Body, ShowImageMargin = false, Padding = new Padding(0, 5, 0, 5) };
+        var keepAwake = new ToolStripMenuItem("", null, (_, _) =>
+        {
+            if (napList.SelectedItems.Count > 0) settings.Exclude(napList.SelectedItems[0].Text);
+        }) { Padding = new Padding(2, 3, 2, 3) };
+        napMenu.Items.Add(keepAwake);
+        napMenu.Opening += (_, e) =>
+        {
+            if (napList.SelectedItems.Count == 0) { e.Cancel = true; return; }
+            keepAwake.Text = $"不要讓 {napList.SelectedItems[0].Text} 休眠";
+            Theme.RoundCorners(napMenu.Handle);
+        };
+        napList.ContextMenuStrip = napMenu;
 
         var layout = new TableLayoutPanel
         {

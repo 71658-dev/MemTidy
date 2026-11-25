@@ -36,6 +36,10 @@ sealed record Palette(
         ButtonFace: Color.FromArgb(58, 58, 60), ButtonFacePressed: Color.FromArgb(72, 72, 74), ButtonBorder: Color.FromArgb(72, 72, 74));
 
     public Color Of(Pressure p) => p switch { Pressure.Green => Green, Pressure.Yellow => Yellow, _ => Red };
+
+    /// <summary>Grouped style (exclusions window): grey page with lighter cards in light mode, the reverse in dark.</summary>
+    public Color GroupedBack => Dark ? Window : Fill;
+    public Color GroupedCard => Dark ? Fill : Window;
 }
 
 static class Theme
@@ -88,6 +92,16 @@ static class Theme
     public static Font Huge => UI(16.5f, FontStyle.Bold);
     static Font? mono;
     public static Font Mono => mono ??= new Font("Consolas", 8.6f);
+
+    /// <summary>Windows' own icon font (Segoe Fluent Icons on 11, Segoe MDL2 Assets on 10): icons without image files.</summary>
+    public static Font Icons(float pt)
+    {
+        var face = iconFace ??= FontFamily.Families.Any(f => f.Name == "Segoe Fluent Icons") ? "Segoe Fluent Icons" : "Segoe MDL2 Assets";
+        if (!iconFonts.TryGetValue(pt, out var f)) iconFonts[pt] = f = new Font(face, pt);
+        return f;
+    }
+    static string? iconFace;
+    static readonly Dictionary<float, Font> iconFonts = new();
 
     // ---- Window chrome ----
     [DllImport("dwmapi.dll")]

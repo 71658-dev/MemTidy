@@ -34,6 +34,77 @@ sealed class Settings
     /// <summary><see cref="Exclusions"/> normalised to lower-case exe names, built by <see cref="Load"/>.</summary>
     [JsonIgnore] public HashSet<string> ExcludedNames { get; private set; } = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>Suggestions the user chose to skip in the exclusions window; never suggested again.</summary>
+    public List<string> DismissedSuggestions { get; set; } = [];
+
+    public static IReadOnlyList<string> DefaultExclusions { get; } = new Settings().Exclusions;
+
+    /// <summary>Raised after the exclusions change (from the window or a hand edit picked up by <see cref="ReloadExclusionsIfChanged"/>).</summary>
+    public event Action? ExclusionsChanged;
+
+    /// <summary>Replaces the exclusions: normalised, de-duplicated, saved, and in effect at once.</summary>
+    public void SetExclusions(IEnumerable<string> names)
+    {
+        Exclusions = names.Where(x => !string.IsNullOrWhiteSpace(x) && x.Length <= 260).Select(NormalizeExe)
+                          .Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.OrdinalIgnoreCase).ToList();
+        ExcludedNames = new HashSet<string>(Exclusions, StringComparer.OrdinalIgnoreCase);
+        Save();
+        ExclusionsChanged?.Invoke();
+    }
+
+    public void Exclude(string exe)
+    {
+        exe = NormalizeExe(exe);
+        if (ExcludedNames.Contains(exe)) return;
+        ActionLog.Add($"已加入排除清單：{exe}"); // before the change: it wakes the program, which is logged too
+        SetExclusions(Exclusions.Append(exe));
+    }
+
+    public void Include(string exe)
+    {
+        exe = NormalizeExe(exe);
+        if (!ExcludedNames.Contains(exe)) return;
+        ActionLog.Add($"已從排除清單移除：{exe}");
+        SetExclusions(Exclusions.Where(x => !NormalizeExe(x).Equals(exe, StringComparison.OrdinalIgnoreCase)));
+    }
+
+    public void DismissSuggestion(string exe)
+    {
+        exe = NormalizeExe(exe);
+        if (DismissedSuggestions.Contains(exe, StringComparer.OrdinalIgnoreCase)) return;
+        DismissedSuggestions.Add(exe);
+        Save();
+    }
+
+    DateTime lastWrite = File.Exists(FilePath) ? File.GetLastWriteTimeUtc(FilePath) : default;
+
+    /// <summary>Picks up a hand edit of settings.json's exclusions (the window calls this when it is activated).</summary>
+    public void ReloadExclusionsIfChanged()
+    {
+        try
+        {
+            if (!File.Exists(FilePath)) return;
+            var t = File.GetLastWriteTimeUtc(FilePath);
+            if (t == lastWrite) return;
+            lastWrite = t;
+            var fresh = JsonSerializer.Deserialize<Settings>(File.ReadAllText(FilePath), Json);
+            if (fresh?.Exclusions is null) return;
+            var normalized = fresh.Exclusions.Where(x => !string.IsNullOrWhiteSpace(x)).Select(NormalizeExe).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            if (normalized.SetEquals(ExcludedNames)) return;
+            Exclusions = fresh.Exclusions;
+            ExcludedNames = new HashSet<string>(normalized.Where(x => x.Length <= 260), StringComparer.OrdinalIgnoreCase);
+            ActionLog.Add("已從 settings.json 重新載入排除清單");
+            ExclusionsChanged?.Invoke();
+        }
+        catch (Exception ex) { ActionLog.Add($"重新載入排除清單失敗（沿用目前清單）：{ex.Message}"); }
+    }
+
+    public static void EditFile()
+    {
+        if (!File.Exists(FilePath)) return;
+        System.Diagnostics.Process.Start(Startup.SystemTool("notepad.exe"), $"\"{FilePath}\"");
+    }
+
     static string Dir => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MemTidy");
     static string FilePath => Path.Combine(Dir, "settings.json");
     static readonly JsonSerializerOptions Json = new()
@@ -101,6 +172,7 @@ sealed class Settings
             Theme = "system";
             corrected.Add(nameof(Theme));
         }
+        DismissedSuggestions ??= [];
         if (Exclusions is null)
         {
             Exclusions = new Settings().Exclusions;
@@ -128,6 +200,7 @@ sealed class Settings
         {
             Directory.CreateDirectory(Dir);
             File.WriteAllText(FilePath, JsonSerializer.Serialize(this, Json));
+            lastWrite = File.GetLastWriteTimeUtc(FilePath); // our own write is not a hand edit
         }
         catch (Exception ex) { ActionLog.Add($"設定檔儲存失敗：{ex.Message}"); }
     }

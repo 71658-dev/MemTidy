@@ -56,7 +56,8 @@
 - 從舊版（以系統管理員常駐）更新時，會自動移除舊的「工作排程器」工作 `MemTidy`；若 Windows 要求系統管理員權限，會先說明原因再詢問一次。
 - 介面依 `MemTidy UI` 設計稿（macOS 26 風格）繪製，預設跟隨 Windows 的淺色／深色應用程式模式（含深色標題列）；右鍵選單「外觀」可改為固定淺色或深色，立即生效並記在設定檔（`"Theme": "system" | "light" | "dark"`）。
 - 系統匣圖示顏色＝目前壓力（灰色＝已暫停）；左鍵開面板，右鍵選單可「立即整理」、暫停、切換開機啟動。
-- 設定檔：`%LOCALAPPDATA%\MemTidy\settings.json`（閒置分鐘、CPU 門檻、排除清單等），改完重開程式生效。可以加註解；不合理的值會改用預設並記在紀錄檔，格式錯誤時本次改用預設、不會覆蓋原檔。
+- **排除清單**（不會被休眠或整理的程式）：從面板的「排除清單…」按鈕或右鍵選單開啟。可以從正在執行的程式挑選、輸入 `.exe` 名稱或選擇 exe 檔，變更立即生效；在面板的「休眠中的背景程式」上按右鍵也能直接加入。今天常因背景工作被喚醒的程式會出現在「建議加入」。系統、安全軟體、輸入法等程式另有內建保護，不在清單上也不會被休眠。
+- 設定檔：`%LOCALAPPDATA%\MemTidy\settings.json`（閒置分鐘、CPU 門檻、排除清單等），除排除清單外改完需重開程式生效（排除清單在其視窗重新取得焦點時就會重新讀入）。可以加註解；不合理的值會改用預設並記在紀錄檔，格式錯誤時本次改用預設、不會覆蓋原檔。
 - 要從指令或腳本關掉常駐中的 MemTidy（會先還原所有程式）：`MemTidy.exe --exit`；`build.ps1` 也會自動這樣做。
 - 紀錄檔：`%LOCALAPPDATA%\MemTidy\memtidy.log`。
 - 背景要持續運作的程式（通話、音樂、錄影）請加入 `Exclusions`；預設已包含 Teams、Zoom、Discord、LINE、Spotify 等。
@@ -85,6 +86,6 @@ MemTidy.exe --force-pressure=yellow --force-for=40 --idle-minutes=0.25 --show-pa
 第一行：模擬紅燈、閒置門檻 15 秒、75 秒後正常結束（會執行還原）。
 第二行：模擬黃燈 40 秒後回到實際狀態，用來測試綠燈恢復記憶體優先權（測試時等待時間會跟著縮短為 15 秒），並一開始就打開面板。
 
-介面測試：`--theme=dark|light` 強制淺色或深色、`--snapshot=面板.png [--snapshot-after=秒]` 與 `--snapshot-cache=快取.png`、`--snapshot-menu=選單.png` 讓程式自己把視窗存成圖片（螢幕鎖定時也能用）；加上 `--demo` 時清單改用範例資料，適合拍 README 截圖。
+介面測試：`--theme=dark|light` 強制淺色或深色、`--snapshot=面板.png [--snapshot-after=秒]` 與 `--snapshot-cache=快取.png`、`--snapshot-menu=選單.png`、`--snapshot-exclusions=排除清單.png [--snapshot-add=新增.png]` 讓程式自己把視窗存成圖片（螢幕鎖定時也能用）；加上 `--demo` 時清單改用範例資料，適合拍 README 截圖。
 
 另外 `MemTidy.exe --cache-report=報告.txt`（需系統管理員）會把快取內容寫成文字檔後結束，並註明用到了哪些權限；`MemTidy.exe --open-cache` 做的事和面板上的「查看快取內容」按鈕一樣（要求以系統管理員開啟快取視窗），用來測試。

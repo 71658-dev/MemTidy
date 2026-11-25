@@ -25,6 +25,7 @@ sealed class ProcessNapper
         public long WorkingSet;
         public bool Owned;            // belongs to the current user (checked once)
         public bool? Protected;       // security / signing / audio / input software (checked once, when first a candidate)
+        public string? Path;          // image path, read once when the exclusions window first needs it ("" = unreadable)
 
         public bool Napped;
         public DateTime NappedAt;
@@ -103,6 +104,45 @@ sealed class ProcessNapper
         .OrderByDescending(p => p.WorkingSet)
         .Select(p => new NapView(p.Pid, p.Name, p.WorkingSet, p.NappedAt, p.TrimmedBytes));
 
+    /// <summary>One program as the exclusions window shows it: all its processes together.</summary>
+    public readonly record struct AppView(string Name, long WorkingSet, bool Napped, string? Path);
+
+    /// <summary>This user's running programs (system and protected ones left out: they never nap), by name, largest first.</summary>
+    public IReadOnlyList<AppView> Running => procs.Values
+        .Where(p => p.Owned && !SystemExclusions.Contains(p.Name) && !IsProtected(p))
+        .GroupBy(p => p.Name, StringComparer.OrdinalIgnoreCase)
+        .Select(g => new AppView(g.First().Name.ToLowerInvariant(), g.Sum(p => p.WorkingSet), g.Any(p => p.Napped), PathOf(g.First())))
+        .OrderByDescending(a => a.WorkingSet)
+        .ToList();
+
+    static string? PathOf(Proc p)
+    {
+        p.Path ??= Native.ImagePath(p.Pid) ?? "";
+        return p.Path.Length > 0 ? p.Path : null;
+    }
+
+    public static bool IsBuiltIn(string name) => SystemExclusions.Contains(name);
+
+    // Wake-ups for background work, per program, today: a program woken often is better left out of napping.
+    readonly Dictionary<string, int> workWakes = new(StringComparer.OrdinalIgnoreCase);
+    DateTime workWakesDay = DateTime.Today;
+
+    /// <summary>The program most often woken for background work today (at least 3 times) and not yet excluded or skipped.</summary>
+    public (string Name, int Count)? Suggestion
+    {
+        get
+        {
+            if (workWakesDay != DateTime.Today) return null;
+            var best = workWakes
+                .Where(kv => kv.Value >= 3 && !IsExcluded(kv.Key)
+                             && !settings.DismissedSuggestions.Contains(kv.Key, StringComparer.OrdinalIgnoreCase))
+                .OrderByDescending(kv => kv.Value).FirstOrDefault();
+            return best.Key == null ? null : (best.Key, best.Value);
+        }
+    }
+
+    public double WakeCpuPercent => settings.WakeCpuPercent;
+
     /// <summary>How long pressure must stay green (with room to spare) before napping apps get their memory priority back.
     /// 3 minutes, shortened along with the idle threshold when testing.</summary>
     TimeSpan CalmBeforeRestore => TimeSpan.FromMinutes(Math.Min(3, settings.IdleMinutes));
@@ -132,7 +172,7 @@ sealed class ProcessNapper
                 {
                     // New process (or a reused PID): start observing; it must prove it is idle first.
                     procs[e.Pid] = new Proc { Pid = e.Pid, Name = e.Name, Created = created, CpuTime = kernel + user, Sampled = now, LastActive = now,
-                                             Owned = Native.IsOwnedByCurrentUser(h) };
+                                             Owned = Native.IsOwnedByCurrentUser(h), WorkingSet = Native.WorkingSet(h) };
                     continue;
                 }
                 p.ParentPid = e.ParentPid;
@@ -152,7 +192,12 @@ sealed class ProcessNapper
         foreach (var p in procs.Values.Where(p => p.Napped))
         {
             if (IsForeground(p)) Wake(p, "回到前景");
-            else if (p.CpuPct >= settings.WakeCpuPercent) Wake(p, $"背景有工作（CPU {p.CpuPct:0.#}%）");
+            else if (p.CpuPct >= settings.WakeCpuPercent)
+            {
+                Wake(p, $"背景有工作（CPU {p.CpuPct:0.#}%）");
+                if (workWakesDay != DateTime.Today) { workWakes.Clear(); workWakesDay = DateTime.Today; }
+                workWakes[p.Name] = workWakes.GetValueOrDefault(p.Name) + 1;
+            }
             else if (IsExcluded(p.Name) || IsProtected(p)) Wake(p, "已加入排除清單");
         }
 

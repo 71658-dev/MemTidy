@@ -33,6 +33,25 @@ static class Demo
         (TimeSpan.FromSeconds(171), "休眠 msedgewebview2.exe (25896)：降低優先權、效率模式、記憶體低優先"),
     ];
 
+    /// <summary>Running programs for the exclusions window (as in the design: 7 of the default 16 running, Chrome often woken).</summary>
+    public static IReadOnlyList<ProcessNapper.AppView> Apps { get; } =
+    [
+        new("brave.exe", 640L << 20, false, null),
+        new("ms-teams.exe", 412L << 20, false, null),
+        new("claude.exe", 318L << 20, false, null),
+        new("outlook.exe", 296L << 20, false, null),
+        new("line.exe", 236L << 20, false, null),
+        new("spotify.exe", 182L << 20, false, null),
+        new("rtkauduservice64.exe", 9L << 20, false, null),
+        new("chrome.exe", 412L << 20, true, null),
+        new("code.exe", 240L << 20, true, null),
+        new("msedgewebview2.exe", 186L << 20, true, null),
+        new("notion.exe", 168L << 20, false, null),
+        new("onedrive.exe", 58L << 20, true, null),
+    ];
+
+    public static (string Name, int Count)? Suggestion => ("chrome.exe", 6);
+
     public static StandbyFiles.Report Cache()
     {
         (string, long)[] files =

@@ -214,6 +214,12 @@ sealed class MacButton : Button
 {
     bool hover, pressed;
     public bool Primary { get; init; }
+    /// <summary>Accent text on a light accent tint, without a border (secondary action on a card).</summary>
+    public bool Soft { get; init; }
+    /// <summary>Corner radius in logical px; null = 7, a large value makes a pill.</summary>
+    public float? Radius { get; init; }
+    /// <summary>An icon-font glyph (<see cref="Theme.Icons"/>) drawn before the text.</summary>
+    public string? Glyph { get; init; }
     /// <summary>What is painted behind the rounded corners (the card the button sits on).</summary>
     public Func<Palette, Color> Behind { get; init; } = p => p.Window;
 
@@ -238,24 +244,41 @@ sealed class MacButton : Button
         g.SmoothingMode = SmoothingMode.AntiAlias;
         float s = DeviceDpi / 96f;
         var r = new RectangleF(0.5f, 0.5f, Width - 1.5f, Height - 1.5f);
+        float radius = Math.Min((Radius ?? 7) * s, r.Height / 2);
         Color face, text;
         if (Primary)
         {
             face = pressed ? Gfx.Mix(p.Accent, Color.Black, 0.18f) : hover ? Gfx.Mix(p.Accent, Color.White, 0.08f) : p.Accent;
             text = p.OnAccent;
-            Gfx.FillRound(g, face, r, 7 * s);
+            Gfx.FillRound(g, face, r, radius);
+        }
+        else if (Soft)
+        {
+            var tint = Gfx.Mix(Behind(p), p.Accent, p.Dark ? 0.22f : 0.10f);
+            face = pressed ? Gfx.Mix(tint, p.Accent, 0.12f) : hover ? Gfx.Mix(tint, p.Accent, 0.06f) : tint;
+            text = p.Dark ? Gfx.Mix(p.Accent, Color.White, 0.25f) : p.Accent;
+            Gfx.FillRound(g, face, r, radius);
         }
         else
         {
             face = pressed ? p.ButtonFacePressed : hover ? Gfx.Mix(p.ButtonFace, p.ButtonFacePressed, 0.5f) : p.ButtonFace;
             text = p.Text;
-            Gfx.FillRound(g, face, r, 7 * s);
-            Gfx.StrokeRound(g, p.ButtonBorder, r, 7 * s);
+            Gfx.FillRound(g, face, r, radius);
+            Gfx.StrokeRound(g, p.ButtonBorder, r, radius);
         }
         if (!Enabled) text = Color.FromArgb(128, text);
         if (Focused && ShowFocusCues)
-            Gfx.StrokeRound(g, Color.FromArgb(150, p.Accent), RectangleF.Inflate(r, -1.5f * s, -1.5f * s), 6 * s, 2 * s);
-        Gfx.Text(g, Text, Font, text, ClientRectangle, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+            Gfx.StrokeRound(g, Color.FromArgb(150, Primary ? p.OnAccent : p.Accent), RectangleF.Inflate(r, -1.5f * s, -1.5f * s), radius - 1.5f * s, 2 * s);
+        if (Glyph == null)
+        {
+            Gfx.Text(g, Text, Font, text, ClientRectangle, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+            return;
+        }
+        var icon = Theme.Icons(Font.SizeInPoints * 0.95f);
+        int gw = Gfx.Measure(Glyph, icon).Width, gap = (int)(8 * s), tw = Gfx.Measure(Text, Font).Width;
+        int x = Math.Max(0, (Width - gw - gap - tw) / 2);
+        Gfx.Text(g, Glyph, icon, text, new Rectangle(x, 0, gw + 2, Height));
+        Gfx.Text(g, Text, Font, text, new Rectangle(x + gw + gap, 0, tw + 2, Height));
     }
 }
 
@@ -532,12 +555,16 @@ sealed class ListFrame : Panel
         Region = new Region(path);
     }
 
+    /// <summary>The frame's fill (the list's background); hairline border only when <see cref="Border"/>.</summary>
+    public Func<Palette, Color> Back { get; init; } = p => p.Window;
+    public bool Border { get; init; } = true;
+
     protected override void OnPaint(PaintEventArgs e)
     {
         var p = Theme.Current;
-        e.Graphics.Clear(p.Window);
+        e.Graphics.Clear(Back(p));
         e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-        Gfx.StrokeRound(e.Graphics, p.Separator, new RectangleF(0.5f, 0.5f, Width - 1.5f, Height - 1.5f), S(10));
+        if (Border) Gfx.StrokeRound(e.Graphics, p.Separator, new RectangleF(0.5f, 0.5f, Width - 1.5f, Height - 1.5f), S(10));
     }
 }
 
