@@ -214,6 +214,8 @@ sealed class MacButton : Button
 {
     bool hover, pressed;
     public bool Primary { get; init; }
+    /// <summary>With <see cref="Primary"/>: filled red instead of accent (removing something).</summary>
+    public bool Destructive { get; init; }
     /// <summary>Accent text on a light accent tint, without a border (secondary action on a card).</summary>
     public bool Soft { get; init; }
     /// <summary>Corner radius in logical px; null = 7, a large value makes a pill.</summary>
@@ -248,7 +250,8 @@ sealed class MacButton : Button
         Color face, text;
         if (Primary)
         {
-            face = pressed ? Gfx.Mix(p.Accent, Color.Black, 0.18f) : hover ? Gfx.Mix(p.Accent, Color.White, 0.08f) : p.Accent;
+            var fill = Destructive ? p.Red : p.Accent;
+            face = pressed ? Gfx.Mix(fill, Color.Black, 0.18f) : hover ? Gfx.Mix(fill, Color.White, 0.08f) : fill;
             text = p.OnAccent;
             Gfx.FillRound(g, face, r, radius);
         }

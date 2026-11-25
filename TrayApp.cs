@@ -280,7 +280,7 @@ sealed class TrayApp : ApplicationContext
         t.Start();
     }
 
-    void Snapshot(Form panel, string path)
+    public static void Snapshot(Form panel, string path)
     {
         // PrintWindow with PW_RENDERFULLCONTENT captures what DWM composes, title bar included.
         using var bmp = new Bitmap(panel.Width, panel.Height);

@@ -23,4 +23,9 @@
     <StartupHookSupport>false</StartupHookSupport>
   </PropertyGroup>
 
+  <ItemGroup>
+    <!-- The installer window's administrator step: the same script install.ps1 reads, built into the exe -->
+    <EmbeddedResource Include="AdminStep.ps1" LogicalName="AdminStep.ps1" />
+  </ItemGroup>
+
 </Project>

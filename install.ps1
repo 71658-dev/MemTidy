@@ -7,56 +7,33 @@
     要先在 Windows 確認視窗同意）不會被你帳號下的其他程式掉包，旁邊也放不進冒名的檔案。MemTidy 本身仍以一般權限執行。
 
     這個腳本只在「複製或刪除程式檔」這一步要求一次系統管理員權限，其餘都以你的身分執行。複製前先記下
-    dist\MemTidy.exe 的 SHA-256，系統管理員步驟只安裝內容完全相同的檔案。系統管理員步驟的程式碼直接放在
-    命令列裡交給 Windows，不會在你同意之後才去讀一個可能被改過的腳本檔。
+    dist\MemTidy.exe 的 SHA-256，系統管理員步驟只安裝內容完全相同的檔案。系統管理員步驟的程式碼（AdminStep.ps1）
+    在要求權限之前就讀進來，直接放在命令列裡交給 Windows，不會在你同意之後才去讀一個可能被改過的腳本檔。
+
+    雙擊 dist\MemTidy.exe 開啟的安裝視窗做的事和這個腳本相同（同一份 AdminStep.ps1，建置時嵌入）。
 
 .EXAMPLE
-    .\install.ps1               # 需要時先建置，安裝或更新，設定開機時自動啟動，並立即啟動
+    .\install.ps1               # 需要時先建置，安裝或更新，設定開機時自動啟動、開始功能表捷徑，並立即啟動
 .EXAMPLE
     .\install.ps1 -Uninstall    # 結束並移除；設定與紀錄檔保留在 %LOCALAPPDATA%\MemTidy
+.EXAMPLE
+    .\install.ps1 -Uninstall -RemoveSettings   # 同上，並刪除設定與紀錄檔（包括排除清單）
 .EXAMPLE
     .\install.ps1 -WhatIf       # 只顯示會做什麼，不做任何變更
 #>
 [CmdletBinding(SupportsShouldProcess)]
-param([switch]$Uninstall)
+param([switch]$Uninstall, [switch]$RemoveSettings)
 
 $ErrorActionPreference = 'Stop'
 $installDir = Join-Path ([Environment]::GetFolderPath('ProgramFiles')) 'MemTidy'
 $installed = Join-Path $installDir 'MemTidy.exe'
 $dist = Join-Path $PSScriptRoot 'dist\MemTidy.exe'
 $runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
+$shortcut = Join-Path ([Environment]::GetFolderPath('Programs')) 'MemTidy.lnk'
+$dataDir = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'MemTidy'
 
-# The administrator step: copy or delete the program file, nothing else. It works out every path itself.
-# Exit codes: 0 done, 1 failed, 2 the copy doesn't match the build, 3 a MemTidy file is in use.
-$adminStep = @'
-param([string]$Mode, [string]$Source, [string]$Sha256)
-$ErrorActionPreference = 'Stop'
-$dir = Join-Path ([Environment]::GetFolderPath('ProgramFiles')) 'MemTidy'
-$exe = Join-Path $dir 'MemTidy.exe'
-$icacls = Join-Path ([Environment]::SystemDirectory) 'icacls.exe'
-try {
-    if ($Mode -eq 'uninstall') {
-        if (Test-Path -LiteralPath $dir) {
-            try { Remove-Item -LiteralPath $dir -Recurse -Force } catch { exit 3 }
-        }
-        exit 0
-    }
-    New-Item -ItemType Directory -Force -Path $dir | Out-Null
-    # Program Files' own permissions: administrators change, everyone else only reads and runs.
-    & $icacls $dir /reset /T /Q | Out-Null
-    $staging = "$exe.new"
-    Copy-Item -LiteralPath $Source -Destination $staging -Force
-    if ((Get-FileHash -LiteralPath $staging -Algorithm SHA256).Hash -ne $Sha256) {
-        Remove-Item -LiteralPath $staging -Force
-        exit 2
-    }
-    try { Move-Item -LiteralPath $staging -Destination $exe -Force }
-    catch { Remove-Item -LiteralPath $staging -Force -ErrorAction SilentlyContinue; exit 3 }
-    & $icacls $exe /reset /Q | Out-Null
-    exit 0
-}
-catch { exit 1 }
-'@
+# The administrator step (copy or delete the program file, nothing else), read now, before any consent is asked for.
+$adminStep = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'AdminStep.ps1') -Raw
 
 function Stop-MemTidy {
     [CmdletBinding(SupportsShouldProcess)]
@@ -95,8 +72,17 @@ function Invoke-AdminStep {
 if ($Uninstall) {
     Stop-MemTidy
     Invoke-AdminStep -Mode 'uninstall' -What '移除 MemTidy（系統管理員步驟）'
-    Remove-ItemProperty -Path $runKey -Name MemTidy -ErrorAction SilentlyContinue
-    if (-not $WhatIfPreference) { Write-Host "已移除 MemTidy。設定與紀錄檔仍在 $env:LOCALAPPDATA\MemTidy，不需要可自行刪除。" }
+    if ($PSCmdlet.ShouldProcess('開機時自動啟動與開始功能表捷徑', '移除')) {
+        Remove-ItemProperty -Path $runKey -Name MemTidy -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath $shortcut -Force -ErrorAction SilentlyContinue
+    }
+    if ($RemoveSettings) {
+        if ((Test-Path -LiteralPath $dataDir) -and $PSCmdlet.ShouldProcess($dataDir, '刪除設定與紀錄檔')) {
+            Remove-Item -LiteralPath $dataDir -Recurse -Force
+        }
+        if (-not $WhatIfPreference) { Write-Host '已移除 MemTidy，設定與紀錄檔也已刪除。' }
+    }
+    elseif (-not $WhatIfPreference) { Write-Host "已移除 MemTidy。設定與紀錄檔仍在 $dataDir，不需要可加 -RemoveSettings 或自行刪除。" }
     return
 }
 
@@ -114,6 +100,14 @@ Invoke-AdminStep -Mode 'install' -What "安裝或更新 $installed（系統管�
 # Start at sign-in from the installed copy, with your normal rights, and start it now.
 if ($PSCmdlet.ShouldProcess('開機時自動啟動', "指向 $installed")) {
     Set-ItemProperty -Path $runKey -Name MemTidy -Value "`"$installed`""
+}
+if ($PSCmdlet.ShouldProcess($shortcut, '建立開始功能表捷徑')) {
+    $shell = New-Object -ComObject WScript.Shell
+    $lnk = $shell.CreateShortcut($shortcut)
+    $lnk.TargetPath = $installed
+    $lnk.WorkingDirectory = $installDir
+    $lnk.Description = 'MemTidy 記憶體整理'
+    $lnk.Save()
 }
 if ($PSCmdlet.ShouldProcess($installed, '以一般權限啟動 MemTidy')) {
     Start-Process -FilePath $installed

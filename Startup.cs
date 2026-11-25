@@ -36,6 +36,9 @@ static class Startup
     /// </summary>
     public static string PreferredExe => File.Exists(InstalledExe) ? InstalledExe : ExePath;
 
+    /// <summary>This process is the copy in Program Files (started plainly, it runs in the tray; any other copy opens the installer).</summary>
+    public static bool IsInstalledCopy => SamePath(ExePath, InstalledExe);
+
     /// <summary>
     /// User environment variables that make a .NET program load extra code when it starts (profilers, another
     /// runtime, extra dependencies). Any program running as the user can set them, and a program started as
@@ -98,7 +101,7 @@ static class Startup
         if (on)
         {
             using var k = Registry.CurrentUser.CreateSubKey(RunKey);
-            k.SetValue("MemTidy", $"\"{PreferredExe}\"");
+            k.SetValue("MemTidy", RunValue);
         }
         else
         {
@@ -127,12 +130,20 @@ static class Startup
                 return;
             }
             var run = RunKeyValue();
-            if (firstRun && run == null) { Set(true); ActionLog.Add("已設定開機時自動啟動"); }
-            // Follow the exe if it moved; once installed, a build run from elsewhere never takes over sign-in start.
-            else if (run != null && !SamePath(run, PreferredExe)) { Set(true); ActionLog.Add($"開機啟動改為：{PreferredExe}"); }
+            // The installed copy's sign-in start is the installer's (or install.ps1's) call: its switch may have been off.
+            if (firstRun && run == null && !IsInstalledCopy) { Set(true); ActionLog.Add("已設定開機時自動啟動"); }
+            // Follow the exe if it moved (and add --tray to an entry from before the installer window, which a plain
+            // start of a build would now open); once installed, a build run from elsewhere never takes over sign-in start.
+            else if (run != null && !string.Equals(run, RunValue, StringComparison.OrdinalIgnoreCase)) { Set(true); ActionLog.Add($"開機啟動改為：{RunValue}"); }
         }
         catch (Exception ex) { ActionLog.Add($"開機啟動設定失敗：{ex.Message}"); }
     }
+
+    /// <summary>
+    /// What the Run key should hold: the installed copy plainly; any other copy with --tray, since a plain start of a
+    /// copy outside Program Files opens the installer.
+    /// </summary>
+    static string RunValue => File.Exists(InstalledExe) ? $"\"{InstalledExe}\"" : $"\"{ExePath}\" --tray";
 
     static string? RunKeyValue()
     {

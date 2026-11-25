@@ -32,7 +32,7 @@ finally {
 }
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-if ($fromDist) { Start-Process -FilePath $dist }
+if ($fromDist) { Start-Process -FilePath $dist -ArgumentList '--tray' } # no switch would open the installer
 Get-Item $dist | Select-Object Name, Length, LastWriteTime
 if (Test-Path (Join-Path ([Environment]::GetFolderPath('ProgramFiles')) 'MemTidy\MemTidy.exe')) {
     Write-Host 'To update the installed copy in Program Files, run .\install.ps1'

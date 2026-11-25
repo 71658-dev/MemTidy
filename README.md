@@ -4,11 +4,20 @@
 
 ```
 .\build.ps1                 # 產生 dist\MemTidy.exe（需 .NET 10 SDK；執行需 .NET 10 Desktop Runtime）
-.\install.ps1               # 安裝到 C:\Program Files\MemTidy（Windows 會確認一次）、設定開機啟動並啟動
-.\install.ps1 -Uninstall    # 移除（設定與紀錄檔保留在 %LOCALAPPDATA%\MemTidy）
+dist\MemTidy.exe            # 開啟安裝視窗：安裝或更新到 C:\Program Files\MemTidy（Windows 會確認一次），也可從這裡移除
 ```
 
-**為什麼要安裝到 Program Files**：只有系統管理員能修改那裡的檔案。MemTidy 唯一以系統管理員執行的部分是「查看快取內容」視窗，裝在 Program Files 後，你帳號下的其他程式就無法掉包它、也無法在它旁邊放冒名的檔案。MemTidy 本身仍以一般權限執行。更新時先 `.\build.ps1` 再 `.\install.ps1`；`install.ps1` 只在複製檔案那一步要求系統管理員權限，並確認裝進去的檔案和剛建置的一模一樣。加上 `-WhatIf` 可以先看它會做什麼。
+命令列版本（行為與安裝視窗相同）：
+
+```
+.\install.ps1                              # 安裝或更新、設定開機啟動與開始功能表捷徑，並啟動
+.\install.ps1 -Uninstall                   # 移除（設定與紀錄檔保留在 %LOCALAPPDATA%\MemTidy）
+.\install.ps1 -Uninstall -RemoveSettings   # 移除，並刪除設定與紀錄檔（包括排除清單）
+```
+
+不在 Program Files 的 MemTidy.exe（例如 `dist\`）直接開啟時是安裝視窗；要不安裝直接常駐，用 `MemTidy.exe --tray`（`build.ps1` 重新啟動 `dist\` 版時會這樣做）。`MemTidy.exe --install` 也會開啟安裝視窗。
+
+**為什麼要安裝到 Program Files**：只有系統管理員能修改那裡的檔案。MemTidy 唯一以系統管理員執行的部分是「查看快取內容」視窗，裝在 Program Files 後，你帳號下的其他程式就無法掉包它、也無法在它旁邊放冒名的檔案。MemTidy 本身仍以一般權限執行。更新時先 `.\build.ps1`，再雙擊 `dist\MemTidy.exe`（或執行 `.\install.ps1`）。兩者都只在複製檔案那一步要求系統管理員權限，並確認裝進去的檔案和剛建置的一模一樣；`install.ps1` 加上 `-WhatIf` 可以先看它會做什麼。
 
 ## 畫面
 
@@ -35,6 +44,17 @@
 **快取內容**：哪些檔案正在快取裡，由大到小（需系統管理員）。
 
 <img src="docs/screenshots/cache.png" alt="快取內容視窗" width="75%">
+
+**安裝程式**：雙擊 `dist\MemTidy.exe` 開啟。先列出會做的變更、哪一步需要系統管理員，再請 Windows 確認一次；更新時會先結束執行中的 MemTidy（被調整過的程式都會先恢復原狀）。已安裝時左下角可以移除，並選擇要不要一併刪除設定與排除清單。
+
+<p>
+  <img src="docs/screenshots/installer-light.png" alt="安裝程式（淺色）" width="49%">
+  <img src="docs/screenshots/installer-dark.png" alt="安裝程式（深色）" width="49%">
+</p>
+
+安裝過程逐步顯示進度；任何一步失敗都會說明原因，而且電腦不會被改動。
+
+<img src="docs/screenshots/installer-progress.png" alt="安裝程式進度" width="49%">
 
 **系統匣選單**：圖示顏色就是目前的記憶體壓力（綠／黃／紅，暫停時為灰）。
 
@@ -63,7 +83,8 @@
 
 - 程式圖示由 `tools\make-icon.ps1` 產生（`app.ico`）；系統匣圖示則依壓力即時著色。
 - **以一般權限執行**，不需要系統管理員；只會處理**你自己帳號的程式**。
-- 第一次執行就會自動設定「開機時自動啟動」（使用者層級的啟動項目，不需要系統管理員）；不要的話在右鍵選單取消勾選即可，之後不會再自動打開。安裝後一律從 `C:\Program Files\MemTidy` 啟動；執行其他位置的 MemTidy（例如 `dist\`）不會改掉它。未安裝時，搬移 exe 位置後執行一次，啟動路徑會自動更新。
+- **開機時自動啟動**（使用者層級的啟動項目，不需要系統管理員）：用安裝視窗安裝時由「開機時自動啟動」開關決定，`install.ps1` 則一律開啟；未安裝、以 `--tray` 執行時，第一次執行會自動開啟。不要的話在右鍵選單取消勾選即可，之後不會再自動打開。安裝後一律從 `C:\Program Files\MemTidy` 啟動；執行其他位置的 MemTidy（例如 `dist\`）不會改掉它。未安裝時，搬移 exe 位置後以 `--tray` 執行一次，啟動路徑會自動更新。
+- **開始功能表**：安裝時會在你帳號的開始功能表加入「MemTidy」捷徑，移除時一併刪除。
 - 從舊版（以系統管理員常駐）更新時，會自動移除舊的「工作排程器」工作 `MemTidy`；若 Windows 要求系統管理員權限，會先說明原因再詢問一次。
 - 介面依 `MemTidy UI` 設計稿（macOS 26 風格）繪製，預設跟隨 Windows 的淺色／深色應用程式模式（含深色標題列）；右鍵選單「外觀」可改為固定淺色或深色，立即生效並記在設定檔（`"Theme": "system" | "light" | "dark"`）。
 - 系統匣圖示顏色＝目前壓力（灰色＝已暫停）；左鍵開面板，右鍵選單可「立即整理」、開啟排除清單、暫停、切換開機啟動、選擇外觀。
@@ -77,6 +98,7 @@
 ## 安全性
 
 - **一般權限常駐**：MemTidy 平常不具系統管理員權限。只有「查看快取內容」會另開一個系統管理員視窗，每次都要你在 Windows 確認視窗同意，關掉就結束。
+- **安裝時只有一步用到系統管理員**：安裝視窗不會以系統管理員重新啟動自己（`dist\` 在你可寫的位置，同意之後可能已被換掉），而是把「複製或刪除程式檔」這段固定的程式碼（`AdminStep.ps1`，建置時嵌入）直接交給 System32 的 `powershell.exe`；檔案先複製成 `MemTidy.exe.new`，SHA-256 和安裝檔一致才換上。開機啟動、開始功能表捷徑和啟動 MemTidy 都以你的帳號執行，而且只在這一步成功後才做，所以失敗時電腦不會被改動。公司的資安軟體（例如 Trend Micro Apex One）可能會攔下「MemTidy.exe 啟動 PowerShell」這一步；被攔下時安裝視窗會顯示失敗、不做任何變更，可改用 `install.ps1`。
 - **只有安裝版會以系統管理員執行**：安裝到 Program Files 後，要求系統管理員權限的一律是 `C:\Program Files\MemTidy\MemTidy.exe`（只有系統管理員能修改），即使目前執行的是 `dist\` 的版本也一樣。
 - **環境變數檢查**：要求系統管理員權限之前，會先檢查你的使用者環境變數有沒有設定會讓 .NET 程式載入額外程式碼的項目（例如 `CORECLR_PROFILER`、`DOTNET_ROOT`）；有的話就不開啟並說明原因。這類變數任何以你身分執行的程式都能設定，是 Program Files 也擋不住的途徑。
 - **不碰重要軟體**：防毒與資安代理程式（Windows SmartScreen、Trend Micro 等）、憑證簽章元件（HiPKI、醫事憑證 ServiSign 等）、音訊、輸入法與協助工具一律不調整；除了程式名稱，也會比對發行者與安裝資料夾，改名過的元件也認得出來。
@@ -97,5 +119,7 @@ MemTidy.exe --force-pressure=yellow --force-for=40 --idle-minutes=0.25 --show-pa
 第二行：模擬黃燈 40 秒後回到實際狀態，用來測試綠燈恢復記憶體優先權（測試時等待時間會跟著縮短為 15 秒），並一開始就打開面板。
 
 介面測試：`--theme=dark|light` 強制淺色或深色、`--snapshot=面板.png [--snapshot-after=秒]` 與 `--snapshot-cache=快取.png`、`--snapshot-menu=選單.png`、`--snapshot-exclusions=排除清單.png [--snapshot-add=新增.png]` 讓程式自己把視窗存成圖片（螢幕鎖定時也能用）；加上 `--demo` 時清單改用範例資料，適合拍 README 截圖。
+
+安裝視窗：`MemTidy.exe --install --demo [--theme=dark|light] [--installer-step=welcome|uac|progress|done|error|confirmRemove|removed] [--installer-fail=cancel|hash|inuse|failed] [--snapshot-installer=安裝.png]`。`--demo` 或 `--installer-fail` 時只模擬流程，不做任何變更；`--installer-fail` 的失敗只發生一次，按「再試一次」會成功。
 
 另外 `MemTidy.exe --cache-report=報告.txt`（需系統管理員）會把快取內容寫成文字檔後結束，並註明用到了哪些權限；`MemTidy.exe --open-cache` 做的事和面板上的「查看快取內容」按鈕一樣（要求以系統管理員開啟快取視窗），用來測試。

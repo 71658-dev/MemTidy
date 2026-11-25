@@ -51,6 +51,14 @@ static class Program
             return;
         }
 
+        // The installer window: "--install", or a plain start of any copy outside Program Files (such as dist\MemTidy.exe).
+        // Such a copy runs in the tray with "--tray" (build.ps1 and the Run key pass it); test switches imply the tray too.
+        if (args.Contains("--install") || (args.Length == 0 && !Startup.IsInstalledCopy))
+        {
+            InstallerForm.Run(args);
+            return;
+        }
+
         // MemTidy itself runs with whatever rights it was started with: normal rights from the Run key or a double-click.
         using var mutex = Startup.InstanceMutex(out bool running);
         if (running) return; // already running in the tray
@@ -77,7 +85,7 @@ static class Program
         Application.ThreadException += (_, e) => ActionLog.Add($"介面錯誤（已略過）：{e.Exception.GetType().Name}: {e.Exception.Message}");
         var settings = Settings.Load();
         Theme.Preference = Theme.Parse(settings.Theme);
-        if (args.Length == 0) Startup.Ensure(settings.FirstRun); // test runs never touch the startup entry
+        if (args.All(a => a == "--tray")) Startup.Ensure(settings.FirstRun); // test runs never touch the startup entry
         if (idleMinutes.HasValue) // not saved
         {
             settings.IdleMinutes = idleMinutes.Value;

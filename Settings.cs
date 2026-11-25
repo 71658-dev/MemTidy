@@ -105,7 +105,7 @@ sealed class Settings
         System.Diagnostics.Process.Start(Startup.SystemTool("notepad.exe"), $"\"{FilePath}\"");
     }
 
-    static string Dir => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MemTidy");
+    public static string Dir => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MemTidy");
     static string FilePath => Path.Combine(Dir, "settings.json");
     static readonly JsonSerializerOptions Json = new()
     {
