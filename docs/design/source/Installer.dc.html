@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>MemTidy 安裝程式</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ios27-kit.css">
+<script src="ds/ios27uikit-e8be57/_ds_bundle.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+[data-theme=light]{--t2:#636366;--win-shadow:0 18px 50px rgba(0,0,0,.18),0 0 0 1px rgba(0,0,0,.08)}
+[data-theme=dark]{--t2:#AEAEB2;--win-shadow:0 18px 50px rgba(0,0,0,.6),0 0 0 1px rgba(255,255,255,.1)}
+:where(.ios) button{font:inherit;border:0;background:none;color:inherit;padding:0;cursor:pointer}
+.ios button:focus-visible{outline:2px solid var(--ios-blue);outline-offset:2px}
+.t2{color:var(--t2)}
+.mono{font-family:ui-monospace,'Cascadia Mono',Consolas,monospace;font-size:12px}
+</style>
+</helmet>
+<div class="ios" data-theme="{{theme}}" style="width: 600px; height: 640px; position: relative; overflow: hidden; display: flex; flex-direction: column; background: var(--ios-bg-grouped-primary); border-radius: 10px; box-shadow: var(--win-shadow); font-family: -apple-system, 'SF Pro Text', 'Segoe UI Variable Text', 'Segoe UI', 'PingFang TC', 'Microsoft JhengHei UI', system-ui, sans-serif">
+
+  <div style="height: 36px; flex: none; display: flex; align-items: center; gap: 10px; padding-left: 14px; background: var(--ios-bg-grouped-secondary); box-shadow: inset 0 -0.5px 0 var(--ios-separator-nonopaque)">
+    <svg width="16" height="16" viewBox="0 0 64 64" aria-hidden="true"><rect x="2" y="2" width="60" height="60" rx="14" fill="#101828"></rect><rect x="20" y="20" width="24" height="24" rx="5" fill="#34C759"></rect></svg>
+    <span style="font-size: 13px; flex-grow: 1">{{winTitle}}</span>
+    <button aria-label="關閉" style="width: 46px; height: 36px; display: flex; align-items: center; justify-content: center"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M0 0l10 10M10 0L0 10" stroke="currentColor" stroke-width="1"></path></svg></button>
+  </div>
+
+  <div style="flex-grow: 1; min-height: 0; display: flex; flex-direction: column; padding: 26px 28px 22px; gap: 18px">
+
+    <div style="display: flex; align-items: center; gap: 16px">
+      <svg width="64" height="64" viewBox="0 0 64 64" role="img" aria-label="MemTidy 圖示" style="flex: none">
+        <rect x="2" y="2" width="60" height="60" rx="15" fill="#101828" stroke="#3B4A5E" stroke-width="2"></rect>
+        <path d="M24 11v8M32 11v8M40 11v8M24 45v8M32 45v8M40 45v8M11 24h8M11 32h8M11 40h8M45 24h8M45 32h8M45 40h8" stroke="#CBD5E1" stroke-width="3.4" stroke-linecap="round"></path>
+        <rect x="18" y="18" width="28" height="28" rx="6" fill="#34C759"></rect>
+        <path d="M36.5 25.5a8 8 0 1 0 3.5 10a6.5 6.5 0 0 1-3.5-10z" fill="#fff"></path>
+      </svg>
+      <div style="flex-grow: 1; min-width: 0">
+        <h1 style="margin: 0; font-size: 22px; line-height: 28px; font-weight: 700">{{heading}}</h1>
+        <div class="t2" style="font-size: 13px; line-height: 18px; margin-top: 3px">{{subheading}}</div>
+      </div>
+    </div>
+
+    <sc-if value="{{isWelcome}}" hint-placeholder-val="{{ true }}">
+      <sc-if value="{{isUpdate}}" hint-placeholder-val="{{ false }}">
+        <div style="display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border-radius: 10px; background: var(--ios-fill-4); font-size: 13px; line-height: 18px">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--ios-blue)" stroke-width="2.2" stroke-linecap="round" aria-hidden="true" style="flex: none; margin-top: 1px"><path d="M12 2a10 10 0 1 0 0 20a10 10 0 1 0 0-20M12 11v6M12 7.5v.5"></path></svg>
+          <span>MemTidy 正在執行。更新前會先結束它，被調整過的程式都會先恢復原狀，更新完再重新啟動。</span>
+        </div>
+      </sc-if>
+      <div>
+        <div class="ios-list" style="width: 100%">
+          <sc-for list="{{opts}}" as="o" hint-placeholder-count="2">
+            <div class="ios-row" style="min-height: 52px">
+              <div class="text">
+                <div style="font-size: 15px">{{o.label}}</div>
+                <div class="t2" style="font-size: 12px; line-height: 16px">{{o.hint}}</div>
+              </div>
+              <button class="{{o.cls}}" role="switch" aria-checked="{{o.on}}" aria-label="{{o.label}}" onClick="{{o.flip}}" style="flex: none"></button>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+      <div>
+        <div class="t2" style="font-size: 13px; padding: 0 4px 6px">會做的變更</div>
+        <div class="ios-list" style="width: 100%">
+          <sc-for list="{{changes}}" as="c" hint-placeholder-count="3">
+            <div class="ios-row" style="min-height: 54px">
+              <div class="text">
+                <div style="font-size: 14px">{{c.what}}</div>
+                <div class="mono t2" style="line-height: 17px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{c.path}}</div>
+              </div>
+              <span style="flex: none; padding: 3px 8px; border-radius: 999px; font-size: 12px; background: {{c.bg}}">{{c.who}}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{isConfirmRemove}}" hint-placeholder-val="{{ false }}">
+      <p style="margin: 0; font-size: 14px; line-height: 21px">會先結束 MemTidy 並把被調整過的程式恢復原狀，再移除程式檔和開機啟動設定。</p>
+      <div class="ios-list" style="width: 100%">
+        <div class="ios-row" style="min-height: 60px">
+          <div class="text">
+            <div style="font-size: 15px">同時刪除設定與紀錄檔</div>
+            <div class="mono t2" style="line-height: 17px">%LOCALAPPDATA%\MemTidy（排除清單也在這裡）</div>
+          </div>
+          <button class="{{wipeCls}}" role="switch" aria-checked="{{wipe}}" aria-label="同時刪除設定與紀錄檔" onClick="{{flipWipe}}" style="flex: none"></button>
+        </div>
+      </div>
+      <p class="t2" style="margin: 0; font-size: 13px; line-height: 18px">保留的話，之後重新安裝會沿用你的排除清單和其他設定。</p>
+    </sc-if>
+
+    <sc-if value="{{isUac}}" hint-placeholder-val="{{ false }}">
+      <div style="flex-grow: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; text-align: center">
+        <div style="width: 72px; height: 72px; border-radius: 20px; display: flex; align-items: center; justify-content: center; background: var(--ios-fill-4)">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--ios-blue)" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l8 3v6c0 5-3.4 9.3-8 11c-4.6-1.7-8-6-8-11V5z"></path><path d="M9 12l2 2 4-4" stroke-linecap="round"></path></svg>
+        </div>
+        <div style="font-size: 17px; font-weight: 600">請在 Windows 確認視窗按「是」</div>
+        <p class="t2" style="margin: 0; max-width: 420px; font-size: 13px; line-height: 19px">只有這一步需要系統管理員權限：{{uacWhy}}。其他步驟都以你的帳號執行，MemTidy 平常也是一般權限。</p>
+        <div style="display: flex; align-items: center; gap: 8px; font-size: 13px" class="t2"><span class="ios-spinner is-small" aria-hidden="true"></span>等待確認…</div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{isProgress}}" hint-placeholder-val="{{ false }}">
+      <div class="ios-list" style="width: 100%">
+        <sc-for list="{{steps}}" as="s" hint-placeholder-count="5">
+          <div class="ios-row" style="min-height: 52px; gap: 14px">
+            <span aria-hidden="true" style="flex: none; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center">
+              <sc-if value="{{s.done}}" hint-placeholder-val="{{ false }}"><span style="width: 22px; height: 22px; border-radius: 50%; background: var(--ios-green); color: #fff; display: flex; align-items: center; justify-content: center"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5 9-10"></path></svg></span></sc-if>
+              <sc-if value="{{s.active}}" hint-placeholder-val="{{ false }}"><span class="ios-spinner is-regular"></span></sc-if>
+              <sc-if value="{{s.todo}}" hint-placeholder-val="{{ true }}"><span style="width: 20px; height: 20px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px var(--ios-gray-3)"></span></sc-if>
+            </span>
+            <div class="text">
+              <div style="font-size: 15px; opacity: {{s.op}}">{{s.label}}</div>
+              <div class="t2" style="font-size: 12px; line-height: 16px">{{s.detail}}</div>
+            </div>
+            <span class="t2" style="flex: none; font-size: 12px">{{s.status}}</span>
+          </div>
+        </sc-for>
+      </div>
+      <div class="ios-progress" role="progressbar" aria-valuenow="{{pct}}" aria-valuemin="0" aria-valuemax="100" aria-label="進度" style="width: 100%"><div class="bar" style="width: {{pctW}}"></div></div>
+    </sc-if>
+
+    <sc-if value="{{isEnd}}" hint-placeholder-val="{{ false }}">
+      <div style="flex-grow: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; text-align: center">
+        <div style="width: 64px; height: 64px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: {{endColor}}; color: #fff">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{endIcon}}"></path></svg>
+        </div>
+        <div style="font-size: 20px; font-weight: 700">{{endTitle}}</div>
+        <p class="t2" style="margin: 0; max-width: 440px; font-size: 14px; line-height: 21px">{{endBody}}</p>
+        <sc-if value="{{showTray}}" hint-placeholder-val="{{ false }}">
+          <div style="display: flex; align-items: center; gap: 10px; padding: 8px 14px; border-radius: 10px; background: var(--ios-bg-grouped-secondary); font-size: 13px">
+            <span aria-hidden="true" style="width: 14px; height: 14px; border-radius: 4px; background: var(--ios-green)"></span>
+            圖示顏色＝記憶體壓力，左鍵開面板、右鍵開選單
+          </div>
+        </sc-if>
+        <sc-if value="{{showCode}}" hint-placeholder-val="{{ false }}">
+          <div class="mono t2" style="padding: 8px 12px; border-radius: 8px; background: var(--ios-fill-4); text-align: left; line-height: 18px; white-space: pre-line">{{code}}</div>
+        </sc-if>
+      </div>
+    </sc-if>
+
+    <div style="margin-top: auto; display: flex; align-items: center; gap: 10px">
+      <sc-if value="{{showRemoveLink}}" hint-placeholder-val="{{ false }}">
+        <button class="ios-btn is-borderless is-small is-destructive" onClick="{{goRemove}}" style="padding: 0">移除 MemTidy…</button>
+      </sc-if>
+      <span style="flex-grow: 1"></span>
+      <sc-if value="{{secondary}}" hint-placeholder-val="{{ true }}">
+        <button class="ios-btn is-bordered is-medium" onClick="{{onSecondary}}">{{secondary}}</button>
+      </sc-if>
+      <sc-if value="{{primary}}" hint-placeholder-val="{{ true }}">
+        <button class="{{primaryCls}}" onClick="{{onPrimary}}">
+          <sc-if value="{{primaryShield}}" hint-placeholder-val="{{ true }}"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l8 3v6c0 5-3.4 9.3-8 11c-4.6-1.7-8-6-8-11V5z"></path></svg></sc-if>{{primary}}
+        </button>
+      </sc-if>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light"},"scenario":{"editor":"enum","options":["install","update"],"default":"install","section":"情境"},"failAt":{"editor":"enum","options":["none","cancel","hash","inuse"],"default":"none","section":"情境"},"step":{"editor":"enum","options":["welcome","uac","progress","done","error","confirmRemove","removed"],"default":"welcome","section":"情境"},"$preview":{"width":600,"height":640}}'>
+const DIR = 'C:\\Program Files\\MemTidy';
+const ICON_OK = 'M5 12l5 5 9-10';
+const ICON_X = 'M12 7v6M12 16.5v.5';
+const ERR = {
+  cancel: { t: '沒有安裝任何東西', b: 'Windows 確認視窗按了「否」。MemTidy 要寫入 Program Files，需要你同意一次系統管理員權限。', retry: true },
+  hash: { t: '安裝已中止，沒有寫入任何檔案', b: '複製到 Program Files 的檔案和安裝檔不一致，可能在安裝過程中被更換。請重新建置或下載後再試。', code: '預期 SHA-256  3F9A…C21E\n實際 SHA-256  B07D…94A0', retry: false },
+  inuse: { t: 'MemTidy 的檔案仍在使用中', b: '「查看快取內容」視窗可能還開著。關閉它之後按「再試一次」，已完成的步驟不會重做。', retry: true }
+};
+
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { step: props.step ?? 'welcome', removing: (props.step ?? '') === 'confirmRemove' || props.step === 'removed', autostart: true, launch: true, wipe: false, at: props.step === 'progress' ? 2 : 0, fail: props.failAt ?? 'none' };
+  }
+  componentWillUnmount() { clearTimeout(this.t); }
+  go(step, extra) { clearTimeout(this.t); this.setState({ step, ...(extra || {}) }); if (step === 'uac') this.t = setTimeout(() => this.afterUac(), 1800); }
+  afterUac() {
+    if (this.state.fail === 'cancel') return this.go('error');
+    this.go('progress', { at: 0 }); this.tick();
+  }
+  tick() {
+    this.t = setTimeout(() => {
+      const n = this.steps().length, at = this.state.at + 1;
+      if (!this.state.removing && this.state.fail !== 'none' && this.state.fail !== 'cancel' && at === 2) return this.go('error');
+      if (at >= n) return this.go(this.state.removing ? 'removed' : 'done', { at });
+      this.setState({ at }); this.tick();
+    }, 900);
+  }
+  steps() {
+    const s = this.state, upd = (this.props.scenario ?? 'install') === 'update';
+    if (s.removing) return [
+      ['結束 MemTidy', '先把被調整過的程式恢復原狀'],
+      ['移除程式檔', DIR],
+      ['移除開機時自動啟動', 'HKCU\\…\\Run\\MemTidy'],
+      ...(s.wipe ? [['刪除設定與紀錄檔', '%LOCALAPPDATA%\\MemTidy']] : [])
+    ];
+    return [
+      ...(upd ? [['結束執行中的 MemTidy', '先把被調整過的程式恢復原狀']] : []),
+      ['複製程式檔', DIR + '\\MemTidy.exe'],
+      ['確認檔案完整', 'SHA-256 和安裝檔一致才換上新檔'],
+      ...(s.autostart ? [['設定開機時自動啟動', '以你的帳號，不需系統管理員']] : []),
+      ...(s.launch ? [['啟動 MemTidy', '以一般權限執行']] : [])
+    ];
+  }
+  renderVals() {
+    const s = this.state, p = this.props;
+    const upd = (p.scenario ?? 'install') === 'update';
+    const step = s.step;
+    const sw = (on) => 'ios-switch' + (on ? ' is-on' : '');
+    const steps = this.steps().map(([label, detail], i) => {
+      const done = i < s.at, active = i === s.at && step === 'progress';
+      return { label, detail, done, active, todo: !done && !active, op: !done && !active ? 0.6 : 1, status: done ? '完成' : active ? '進行中' : '' };
+    });
+    const pct = Math.round((Math.min(s.at, steps.length) / steps.length) * 100);
+    const err = ERR[s.fail] || ERR.inuse;
+    const install = () => this.go('uac', { removing: false, at: 0 });
+    const close = () => this.go('welcome', { removing: false, at: 0 });
+    let heading, subheading, primary = '', secondary = '', onPrimary = close, onSecondary = close, primaryShield = false, primaryDanger = false;
+    if (step === 'welcome') {
+      heading = upd ? '更新 MemTidy 記憶體整理' : '安裝 MemTidy 記憶體整理';
+      subheading = upd ? '將以這個版本取代已安裝的 MemTidy，設定與排除清單會保留' : '仿 macOS 的記憶體管理：只讓你沒在用的背景程式讓出資源，不關閉任何程式';
+      primary = upd ? '更新' : '安裝'; secondary = '取消'; onPrimary = install; primaryShield = true;
+    } else if (step === 'confirmRemove') {
+      heading = '移除 MemTidy'; subheading = DIR;
+      primary = '移除'; secondary = '取消'; onPrimary = () => this.go('uac', { removing: true, at: 0 }); primaryShield = true; primaryDanger = true;
+    } else if (step === 'uac' || step === 'progress') {
+      heading = s.removing ? '正在移除 MemTidy' : upd ? '正在更新 MemTidy' : '正在安裝 MemTidy';
+      subheading = step === 'uac' ? '等待系統管理員確認' : '請稍候，約需幾秒鐘';
+    } else if (step === 'done') {
+      heading = upd ? '更新完成' : '安裝完成'; subheading = DIR; primary = '完成';
+    } else if (step === 'removed') {
+      heading = '已移除 MemTidy'; subheading = s.wipe ? '程式、開機啟動與設定都已刪除' : '設定與紀錄檔仍保留在 %LOCALAPPDATA%\\MemTidy'; primary = '完成';
+    } else {
+      heading = upd ? '無法更新 MemTidy' : '無法安裝 MemTidy'; subheading = '你的電腦沒有被修改';
+      primary = err.retry ? '再試一次' : '結束'; secondary = err.retry ? '取消' : '';
+      onPrimary = err.retry ? () => this.go('uac', { fail: 'none', at: 0 }) : close; primaryShield = err.retry;
+    }
+    const isEnd = step === 'done' || step === 'removed' || step === 'error';
+    return {
+      theme: p.theme ?? 'light',
+      winTitle: s.removing ? '移除 MemTidy' : upd ? 'MemTidy 更新程式' : 'MemTidy 安裝程式',
+      heading, subheading, isUpdate: upd,
+      isWelcome: step === 'welcome', isConfirmRemove: step === 'confirmRemove', isUac: step === 'uac', isProgress: step === 'progress', isEnd,
+      uacWhy: s.removing ? '刪除 Program Files 裡的程式檔' : '把程式檔放進 Program Files，讓其他程式無法掉包它',
+      opts: [
+        { label: '開機時自動啟動', hint: '登入 Windows 後在系統匣執行，之後可在右鍵選單關閉', on: s.autostart, cls: sw(s.autostart), flip: () => this.setState({ autostart: !s.autostart }) },
+        { label: (upd ? '更新' : '安裝') + '完成後立即啟動', hint: '以一般權限執行，不會要求系統管理員', on: s.launch, cls: sw(s.launch), flip: () => this.setState({ launch: !s.launch }) }
+      ],
+      changes: [
+        { what: upd ? '取代程式檔' : '安裝程式檔', path: DIR + '\\MemTidy.exe', who: '需系統管理員一次', bg: 'var(--ios-fill-3)' },
+        { what: '開機時自動啟動', path: 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run', who: s.autostart ? '你的帳號' : '不設定', bg: 'var(--ios-fill-4)' },
+        { what: '設定與紀錄檔', path: '%LOCALAPPDATA%\\MemTidy', who: upd ? '保留不動' : '首次執行時建立', bg: 'var(--ios-fill-4)' }
+      ],
+      wipe: s.wipe, wipeCls: sw(s.wipe), flipWipe: () => this.setState({ wipe: !s.wipe }),
+      steps, pct, pctW: pct + '%',
+      endColor: step === 'error' ? 'var(--ios-orange)' : 'var(--ios-green)', endIcon: step === 'error' ? ICON_X : ICON_OK,
+      endTitle: step === 'done' ? (s.launch ? 'MemTidy 已在系統匣執行' : 'MemTidy 已安裝') : step === 'removed' ? '已從這台電腦移除' : err.t,
+      endBody: step === 'done' ? (s.launch ? '記憶體寬裕時它什麼都不做；開始吃緊時，才會讓閒置的背景程式讓出資源，切回去立刻恢復。' : '可從開始功能表啟動 MemTidy。') : step === 'removed' ? '所有被調整過的程式都已恢復原狀。' : err.b,
+      showTray: step === 'done' && s.launch, showCode: step === 'error' && !!err.code, code: err.code || '',
+      showRemoveLink: step === 'welcome' && upd, goRemove: () => this.go('confirmRemove', { removing: true }),
+      primary, secondary, onPrimary, onSecondary, primaryShield,
+      primaryCls: 'ios-btn is-prominent is-medium' + (primaryDanger ? ' is-destructive' : '')
+    };
+  }
+}
+</script>
+</body>
+</html>

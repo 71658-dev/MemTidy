@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>MemTidy 排除清單</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ios27-kit.css">
+<script src="ds/ios27uikit-e8be57/_ds_bundle.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+[data-theme=light]{--t2:#636366;--win-shadow:0 18px 50px rgba(0,0,0,.18),0 0 0 1px rgba(0,0,0,.08)}
+[data-theme=dark]{--t2:#AEAEB2;--win-shadow:0 18px 50px rgba(0,0,0,.6),0 0 0 1px rgba(255,255,255,.1)}
+:where(.ios) button{font:inherit;border:0;background:none;color:inherit;padding:0;cursor:pointer}
+:where(.ios) input{font:inherit;color:inherit;border:0;background:none;outline:none}
+.ios-row:hover{background:var(--ios-fill-5)}
+.ios button:focus-visible,.ios input:focus-visible{outline:2px solid var(--ios-blue);outline-offset:2px}
+.t2{color:var(--t2)}
+</style>
+</helmet>
+<div class="ios" data-theme="{{theme}}" style="width: 760px; height: 880px; position: relative; overflow: hidden; display: flex; flex-direction: column; background: var(--ios-bg-grouped-primary); border-radius: 10px; box-shadow: var(--win-shadow); font-family: -apple-system, 'SF Pro Text', 'Segoe UI Variable Text', 'Segoe UI', 'PingFang TC', 'Microsoft JhengHei UI', system-ui, sans-serif">
+
+  <div style="height: 36px; flex: none; display: flex; align-items: center; gap: 10px; padding: 0 0 0 14px; background: var(--ios-bg-grouped-secondary); box-shadow: inset 0 -0.5px 0 var(--ios-separator-nonopaque)">
+    <span aria-hidden="true" style="width: 16px; height: 16px; border-radius: 4px; background: var(--ios-green)"></span>
+    <span style="font-size: 13px; flex-grow: 1">排除清單 — 記憶體整理</span>
+    <button aria-label="最小化" style="width: 46px; height: 36px; display: flex; align-items: center; justify-content: center"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M0 5h10" stroke="currentColor" stroke-width="1"></path></svg></button>
+    <button aria-label="關閉" style="width: 46px; height: 36px; display: flex; align-items: center; justify-content: center"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M0 0l10 10M10 0L0 10" stroke="currentColor" stroke-width="1"></path></svg></button>
+  </div>
+
+  <div style="flex-grow: 1; min-height: 0; display: flex; flex-direction: column; gap: 14px; padding: 20px 24px 18px">
+
+    <div style="display: flex; align-items: flex-start; gap: 16px">
+      <div style="flex-grow: 1">
+        <h1 style="margin: 0; font-size: 22px; line-height: 28px; font-weight: 700">排除清單</h1>
+        <p class="t2" style="margin: 4px 0 0; font-size: 13px; line-height: 18px">清單裡的程式在背景時不會被降速或釋出記憶體。適合通話、音樂、錄影等需要持續運作的程式。</p>
+      </div>
+      <button class="ios-btn is-prominent is-medium" onClick="{{openSheet}}" style="flex: none">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>新增程式
+      </button>
+    </div>
+
+    <div style="display: flex; align-items: center; gap: 12px">
+      <label class="ios-field" style="flex-grow: 1; width: auto; height: 36px; padding: 0 12px; border-radius: 10px; background: var(--ios-fill-3); font-size: 15px">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" class="t2"><path d="M11 4a7 7 0 1 0 0 14a7 7 0 1 0 0-14M20 20l-4-4"></path></svg>
+        <input aria-label="搜尋排除清單" placeholder="搜尋程式名稱或 .exe" value="{{q}}" onChange="{{onSearch}}" style="flex-grow: 1; min-width: 0">
+      </label>
+      <div class="ios-segmented is-small" role="group" aria-label="篩選" style="width: 290px; height: 36px">
+        <sc-for list="{{segs}}" as="seg" hint-placeholder-count="3">
+          <button class="{{seg.cls}}" aria-pressed="{{seg.on}}" onClick="{{seg.pick}}">{{seg.label}}</button>
+        </sc-for>
+      </div>
+    </div>
+
+    <sc-if value="{{showSuggest}}" hint-placeholder-val="{{ true }}">
+      <div style="display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-radius: 10px; background: var(--ios-bg-grouped-secondary)">
+        <span aria-hidden="true" style="flex: none; width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; background: var(--ios-orange); color: #fff"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7V16h8v-1.3A7 7 0 0 0 12 2z"></path></svg></span>
+        <div style="flex-grow: 1; min-width: 0">
+          <div style="font-size: 15px; font-weight: 600">建議加入：Google Chrome（chrome.exe）</div>
+          <div class="t2" style="font-size: 13px; line-height: 18px; margin-top: 2px">今天休眠時有 6 次因背景工作被喚醒（CPU 超過 5%），可能在背景播放或視訊。</div>
+        </div>
+        <button class="ios-btn is-borderless is-small" onClick="{{dismiss}}" style="flex: none">略過</button>
+        <button class="ios-btn is-bordered is-small" onClick="{{addSuggest}}" style="flex: none">加入排除</button>
+      </div>
+    </sc-if>
+
+    <div style="flex-grow: 1; min-height: 0; display: flex; flex-direction: column">
+      <div class="t2" style="display: flex; justify-content: space-between; padding: 0 4px 6px; font-size: 13px">
+        <span>你的排除清單 · {{count}} 個</span>
+        <span>依名稱排序</span>
+      </div>
+      <div style="flex-grow: 1; min-height: 0; overflow-y: auto; border-radius: 10px">
+        <div class="ios-list" style="width: 100%">
+          <sc-for list="{{rows}}" as="row" hint-placeholder-count="6">
+            <div class="ios-row" style="min-height: 56px; gap: 12px">
+              <span aria-hidden="true" style="flex: none; width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; background: {{row.tile}}; color: #fff">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="{{row.d}}"></path></svg>
+              </span>
+              <div class="text">
+                <div style="font-size: 15px; line-height: 20px">{{row.name}}</div>
+                <div class="t2" style="font-size: 13px; line-height: 17px">{{row.sub}}</div>
+              </div>
+              <sc-if value="{{row.redundant}}" hint-placeholder-val="{{ false }}">
+                <span style="flex: none; padding: 3px 8px; border-radius: 999px; background: var(--ios-fill-3); font-size: 12px">系統已保護，可移除</span>
+              </sc-if>
+              <span class="t2" style="flex: none; width: 118px; display: flex; align-items: center; gap: 6px; font-size: 13px">
+                <span aria-hidden="true" style="width: 7px; height: 7px; border-radius: 50%; background: {{row.dot}}"></span>{{row.status}}
+              </span>
+              <button class="ios-btn is-borderless is-small is-symbol is-destructive" aria-label="{{row.removeLabel}}" onClick="{{row.remove}}" style="flex: none">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18M8 12h8"></path></svg>
+              </button>
+            </div>
+          </sc-for>
+          <sc-if value="{{empty}}" hint-placeholder-val="{{ false }}">
+            <div class="ios-row t2" style="justify-content: center; font-size: 14px">沒有符合的程式</div>
+          </sc-if>
+        </div>
+
+        <div class="ios-list" style="width: 100%; margin-top: 14px">
+          <button class="ios-row" onClick="{{toggleSys}}" aria-expanded="{{expanded}}" style="width: 100%; min-height: 60px; text-align: left">
+            <span aria-hidden="true" style="flex: none; width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; background: var(--ios-gray-1); color: #fff"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 2l8 3v6c0 5-3.4 9.3-8 11c-4.6-1.7-8-6-8-11V5z"></path></svg></span>
+            <div class="text">
+              <div style="font-size: 15px; line-height: 20px">系統保護的程式</div>
+              <div class="t2" style="font-size: 13px; line-height: 17px">64 個程式名稱，另依發行者與安裝資料夾判斷 · 無法移除</div>
+            </div>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true" class="t2" style="transform: {{chevRot}}"><path d="M9 6l6 6-6 6"></path></svg>
+          </button>
+          <sc-if value="{{expanded}}" hint-placeholder-val="{{ false }}">
+            <sc-for list="{{sysGroups}}" as="g" hint-placeholder-count="5">
+              <div class="ios-row" style="min-height: 48px; padding-left: 60px">
+                <div class="text">
+                  <div style="font-size: 14px">{{g.name}} · {{g.n}}</div>
+                  <div class="t2" style="font-size: 12px; line-height: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{g.sample}}</div>
+                </div>
+              </div>
+            </sc-for>
+          </sc-if>
+        </div>
+      </div>
+    </div>
+
+    <div style="display: flex; align-items: center; gap: 4px">
+      <button class="ios-btn is-borderless is-small" onClick="{{resetDefaults}}">還原預設清單</button>
+      <button class="ios-btn is-borderless is-small">在 settings.json 中編輯</button>
+      <span class="t2" style="margin-left: auto; font-size: 12px">名稱不分大小寫 · 變更立即生效</span>
+    </div>
+  </div>
+
+  <sc-if value="{{toast}}" hint-placeholder-val="{{ false }}">
+    <div role="status" style="position: absolute; left: 50%; bottom: 64px; transform: translateX(-50%); display: flex; align-items: center; gap: 14px; padding: 8px 8px 8px 18px; border-radius: 999px; background: var(--ios-glass-fill); box-shadow: inset 0 0 0 0.5px var(--ios-glass-stroke), var(--ios-glass-shadow); backdrop-filter: blur(20px) saturate(180%); font-size: 14px; white-space: nowrap">
+      {{toastText}}
+      <button class="ios-btn is-bordered is-small" onClick="{{undo}}">復原</button>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{sheet}}" hint-placeholder-val="{{ false }}">
+    <div style="position: absolute; inset: 36px 0 0; background: rgba(0,0,0,.32); display: flex; align-items: center; justify-content: center">
+      <div role="dialog" aria-label="新增排除程式" style="width: 540px; max-height: 760px; display: flex; flex-direction: column; border-radius: 14px; background: var(--ios-bg-elevated-primary, var(--ios-bg-primary)); box-shadow: var(--ios-glass-shadow); overflow: hidden">
+        <div style="padding: 20px 20px 14px; display: flex; flex-direction: column; gap: 12px">
+          <h2 style="margin: 0; font-size: 17px; line-height: 22px; font-weight: 600">新增排除程式</h2>
+          <div class="ios-segmented is-small" role="group" aria-label="新增方式" style="width: 100%">
+            <sc-for list="{{modes}}" as="m" hint-placeholder-count="2">
+              <button class="{{m.cls}}" aria-pressed="{{m.on}}" onClick="{{m.pick}}">{{m.label}}</button>
+            </sc-for>
+          </div>
+        </div>
+
+        <sc-if value="{{pickMode}}" hint-placeholder-val="{{ true }}">
+          <div class="t2" style="padding: 0 24px 6px; font-size: 12px">你帳號下正在執行的程式，依記憶體由大到小</div>
+          <div style="overflow-y: auto; padding: 0 12px; max-height: 420px">
+            <sc-for list="{{cands}}" as="c" hint-placeholder-count="6">
+              <button class="ios-row" onClick="{{c.toggle}}" disabled="{{c.already}}" aria-pressed="{{c.on}}" style="width: 100%; min-height: 56px; padding: 0 12px; border-radius: 10px; text-align: left; background: transparent; opacity: {{c.op}}">
+                <span aria-hidden="true" style="flex: none; width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: inset 0 0 0 1.5px {{c.ring}}; background: {{c.fill}}; color: #fff">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5 9-10"></path></svg>
+                </span>
+                <div class="text">
+                  <div style="font-size: 15px; line-height: 20px">{{c.name}}</div>
+                  <div class="t2" style="font-size: 13px; line-height: 17px">{{c.sub}}</div>
+                </div>
+                <sc-if value="{{c.tag}}" hint-placeholder-val="{{ false }}">
+                  <span style="flex: none; padding: 3px 8px; border-radius: 999px; background: var(--ios-fill-3); font-size: 12px">{{c.tag}}</span>
+                </sc-if>
+                <span class="t2" style="flex: none; width: 64px; text-align: right; font-size: 13px">{{c.mem}}</span>
+              </button>
+            </sc-for>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{manualMode}}" hint-placeholder-val="{{ false }}">
+          <div style="padding: 4px 20px 8px; display: flex; flex-direction: column; gap: 8px">
+            <label for="exe-input" style="font-size: 13px; font-weight: 600">程式檔名</label>
+            <div class="ios-field is-focused" style="width: 100%; height: 44px">
+              <input id="exe-input" placeholder="例如 spotify 或 spotify.exe" value="{{manual}}" onChange="{{onManual}}" style="flex-grow: 1; min-width: 0">
+            </div>
+            <div class="t2" style="font-size: 13px; line-height: 18px; min-height: 36px">{{manualHint}}</div>
+          </div>
+        </sc-if>
+
+        <div style="display: flex; align-items: center; gap: 10px; padding: 14px 20px 18px; box-shadow: inset 0 0.5px 0 var(--ios-separator-nonopaque)">
+          <span class="t2" style="font-size: 13px; flex-grow: 1">{{selText}}</span>
+          <button class="ios-btn is-bordered is-medium" onClick="{{closeSheet}}">取消</button>
+          <button class="{{addCls}}" onClick="{{confirmAdd}}" disabled="{{cantAdd}}">加入排除清單</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark"],"default":"light"},"$preview":{"width":760,"height":880}}'>
+const ICON = {
+  call: 'M22 16.9v3a2 2 0 0 1-2.2 2a19.8 19.8 0 0 1-8.6-3.1a19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2A2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z',
+  music: 'M9 18V5l12-2v13M9 18a3 3 0 1 1-6 0a3 3 0 1 1 6 0M21 16a3 3 0 1 1-6 0a3 3 0 1 1 6 0',
+  video: 'M4 6h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2zM22 8l-6 4 6 4z',
+  web: 'M12 2a10 10 0 1 0 0 20a10 10 0 1 0 0-20M2 12h20M12 2a15 15 0 0 1 0 20a15 15 0 0 1 0-20',
+  audio: 'M11 5L6 9H2v6h4l5 4zM15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14',
+  mail: 'M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zM22 7l-10 6L2 7',
+  app: 'M7 3h10a4 4 0 0 1 4 4v10a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V7a4 4 0 0 1 4-4zM3 9h18'
+};
+const TILE = { call: 'var(--ios-green)', music: 'var(--ios-pink)', video: 'var(--ios-indigo)', web: 'var(--ios-blue)', audio: 'var(--ios-orange)', mail: 'var(--ios-cyan)', app: 'var(--ios-gray-1)' };
+const LBL = { call: '通話', music: '音樂', video: '錄影', web: '瀏覽器', audio: '音訊', mail: '郵件', app: '其他' };
+const DEF = [
+  { exe: 'brave.exe', name: 'Brave', cat: 'web', mem: '640 MB' },
+  { exe: 'claude.exe', name: 'Claude', cat: 'app', mem: '318 MB' },
+  { exe: 'discord.exe', name: 'Discord', cat: 'call' },
+  { exe: 'foobar2000.exe', name: 'foobar2000', cat: 'music' },
+  { exe: 'line.exe', name: 'LINE', cat: 'call', mem: '236 MB' },
+  { exe: 'linecall.exe', name: 'LINE 通話元件', cat: 'call' },
+  { exe: 'linemediaplayer.exe', name: 'LINE 媒體播放器', cat: 'music' },
+  { exe: 'ms-teams.exe', name: 'Microsoft Teams', cat: 'call', mem: '412 MB' },
+  { exe: 'obs64.exe', name: 'OBS Studio', cat: 'video' },
+  { exe: 'outlook.exe', name: 'Outlook', cat: 'mail', mem: '205 MB' },
+  { exe: 'rtkauduservice64.exe', name: 'Realtek 音訊服務', cat: 'audio', mem: '9 MB', redundant: true },
+  { exe: 'spotify.exe', name: 'Spotify', cat: 'music', mem: '182 MB' },
+  { exe: 'teams.exe', name: 'Microsoft Teams（傳統版）', cat: 'call' },
+  { exe: 'vlc.exe', name: 'VLC media player', cat: 'music' },
+  { exe: 'webex.exe', name: 'Webex', cat: 'call' },
+  { exe: 'zoom.exe', name: 'Zoom', cat: 'call' }
+];
+const CANDS = [
+  { exe: 'chrome.exe', name: 'Google Chrome', cat: 'web', mem: '1.4 GB', tag: '休眠中 · 常被喚醒' },
+  { exe: 'code.exe', name: 'Visual Studio Code', cat: 'app', mem: '820 MB' },
+  { exe: 'brave.exe', name: 'Brave', cat: 'web', mem: '640 MB' },
+  { exe: 'acrobat.exe', name: 'Adobe Acrobat', cat: 'app', mem: '310 MB', tag: '休眠中' },
+  { exe: 'line.exe', name: 'LINE', cat: 'call', mem: '236 MB' },
+  { exe: 'msedgewebview2.exe', name: 'Microsoft Edge WebView2', cat: 'web', mem: '186 MB', tag: '休眠中' },
+  { exe: 'onedrive.exe', name: 'OneDrive', cat: 'app', mem: '58 MB', tag: '休眠中' }
+];
+const SYS = [
+  { name: 'Windows 核心', n: 34, sample: 'dwm.exe、explorer.exe、svchost.exe、csrss.exe、lsass.exe、taskmgr.exe…' },
+  { name: '資安軟體', n: 9, sample: 'msmpeng.exe、smartscreen.exe、pccntmon.exe、secureconnector.exe…' },
+  { name: '憑證簽章', n: 5, sample: 'chtnode.exe、chksrv.exe、hcaservisign.exe（HiPKI、醫事憑證）…' },
+  { name: '音訊', n: 4, sample: 'audiodg.exe、rtkauduservice64.exe、rtkuwp.exe、igoswserver.exe' },
+  { name: '輸入法與協助工具', n: 12, sample: 'ctfmon.exe、textinputhost.exe、chtime.exe、narrator.exe、nvda.exe…' },
+  { name: '依發行者與安裝資料夾', n: 43, sample: 'Trend Micro、ESET、中華電信、ServiSign、Realtek、Logitech、NV Access…' }
+];
+const norm = (s) => { s = s.trim().toLowerCase(); return s.endsWith('.exe') ? s : s + '.exe'; };
+const segCls = (on) => 'seg' + (on ? ' is-selected' : '');
+
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { filter: 'all', q: '', removed: [], added: [], expanded: false, sheet: false, mode: 'pick', picked: [], manual: '', toast: null, dismissed: false };
+  }
+  flash(toast) {
+    this.setState({ toast });
+    clearTimeout(this.t);
+    this.t = setTimeout(() => this.setState({ toast: null }), 5000);
+  }
+  add(entries) {
+    this.setState((st) => ({ added: [...st.added, ...entries], removed: st.removed.filter((x) => !entries.some((e) => e.exe === x)), sheet: false, picked: [], manual: '' }));
+    this.flash({ text: entries.length === 1 ? '已加入 ' + entries[0].exe : '已加入 ' + entries.length + ' 個程式', added: entries.map((e) => e.exe) });
+  }
+  renderVals() {
+    const s = this.state;
+    const all = [...DEF, ...s.added].filter((x) => !s.removed.includes(x.exe)).sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant'));
+    const has = (exe) => all.some((x) => x.exe === exe);
+    const q = s.q.trim().toLowerCase();
+    let list = s.filter === 'run' ? all.filter((x) => x.mem) : s.filter === 'idle' ? all.filter((x) => !x.mem) : all;
+    if (q) list = list.filter((x) => (x.exe + ' ' + x.name).toLowerCase().includes(q));
+    const nRun = all.filter((x) => x.mem).length;
+    const segs = [['all', '全部 ' + all.length], ['run', '執行中 ' + nRun], ['idle', '未執行 ' + (all.length - nRun)]].map(([k, label]) => ({
+      label, on: s.filter === k, cls: segCls(s.filter === k), pick: () => this.setState({ filter: k })
+    }));
+    const rows = list.map((x) => ({
+      ...x, d: ICON[x.cat], tile: TILE[x.cat], sub: x.exe + ' · ' + LBL[x.cat],
+      status: x.mem ? '執行中 · ' + x.mem : '未執行', dot: x.mem ? 'var(--ios-green)' : 'var(--ios-gray-3)',
+      redundant: !!x.redundant, removeLabel: '從排除清單移除 ' + x.exe,
+      remove: () => { this.setState((st) => ({ removed: [...st.removed, x.exe] })); this.flash({ text: '已移除 ' + x.name, removed: x.exe }); }
+    }));
+    const cands = CANDS.map((c) => {
+      const already = has(c.exe), on = s.picked.includes(c.exe);
+      return {
+        ...c, already, on, op: already ? 0.45 : 1,
+        sub: c.exe + (already ? ' · 已在清單' : ''),
+        ring: on ? 'var(--ios-blue)' : 'var(--ios-gray-3)', fill: on ? 'var(--ios-blue)' : 'transparent',
+        toggle: () => this.setState((st) => ({ picked: on ? st.picked.filter((e) => e !== c.exe) : [...st.picked, c.exe] }))
+      };
+    });
+    const pickMode = s.mode === 'pick';
+    const m = s.manual.trim();
+    const mExe = m ? norm(m) : '';
+    const mBad = m && !/^[^\\/:*?"<>|]+$/.test(m);
+    const manualHint = !m ? '不分大小寫，沒打 .exe 會自動補上。程式不必正在執行。'
+      : mBad ? '檔名不能包含 \\ / : * ? " < > | 這些字元。'
+      : has(mExe) ? mExe + ' 已經在排除清單裡。' : '將加入：' + mExe;
+    const cantAdd = pickMode ? s.picked.length === 0 : (!m || mBad || has(mExe));
+    const modes = [['pick', '從執行中的程式選擇'], ['manual', '手動輸入檔名']].map(([k, label]) => ({
+      label, on: s.mode === k, cls: segCls(s.mode === k), pick: () => this.setState({ mode: k })
+    }));
+    return {
+      theme: this.props.theme ?? 'light',
+      q: s.q, onSearch: (e) => this.setState({ q: e.target.value }),
+      segs, rows, count: all.length, empty: rows.length === 0,
+      showSuggest: !s.dismissed && !has('chrome.exe'),
+      dismiss: () => this.setState({ dismissed: true }),
+      addSuggest: () => this.add([CANDS[0]]),
+      expanded: s.expanded, chevRot: s.expanded ? 'rotate(90deg)' : 'none',
+      toggleSys: () => this.setState({ expanded: !s.expanded }), sysGroups: SYS,
+      resetDefaults: () => { this.setState({ removed: [], added: [] }); this.flash({ text: '已還原為預設的 16 個程式', reset: { removed: s.removed, added: s.added } }); },
+      toast: !!s.toast, toastText: s.toast ? s.toast.text : '',
+      undo: () => {
+        const t = s.toast; if (!t) return;
+        this.setState((st) => ({
+          removed: t.reset ? t.reset.removed : t.removed ? st.removed.filter((e) => e !== t.removed) : st.removed,
+          added: t.reset ? t.reset.added : t.added ? st.added.filter((e) => !t.added.includes(e.exe)) : st.added,
+          toast: null
+        }));
+      },
+      sheet: s.sheet, openSheet: () => this.setState({ sheet: true, mode: 'pick', picked: [], manual: '' }),
+      closeSheet: () => this.setState({ sheet: false }),
+      modes, pickMode, manualMode: !pickMode, cands,
+      manual: s.manual, onManual: (e) => this.setState({ manual: e.target.value }), manualHint,
+      selText: pickMode ? (s.picked.length ? '已選 ' + s.picked.length + ' 個' : '點選要排除的程式') : '',
+      cantAdd, addCls: 'ios-btn is-prominent is-medium' + (cantAdd ? ' is-disabled' : ''),
+      confirmAdd: () => {
+        if (cantAdd) return;
+        this.add(pickMode ? CANDS.filter((c) => s.picked.includes(c.exe)) : [{ exe: mExe, name: mExe.replace(/\.exe$/, ''), cat: 'app' }]);
+      }
+    };
+  }
+}
+</script>
+</body>
+</html>
