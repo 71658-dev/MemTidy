@@ -27,6 +27,8 @@ static class Program
         // No tray, no settings or log files, and it ends when its window closes.
         if (args.Contains("--cache-window"))
         {
+            // The tray passes its palette along, since this copy reads no settings.
+            if (args.Contains("--theme=dark") || args.Contains("--theme=light")) Theme.Forced = args.Contains("--theme=dark");
             ApplicationConfiguration.Initialize();
             Application.Run(new CacheForm(TrayApp.AppIcon));
             return;
@@ -74,6 +76,7 @@ static class Program
         Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
         Application.ThreadException += (_, e) => ActionLog.Add($"介面錯誤（已略過）：{e.Exception.GetType().Name}: {e.Exception.Message}");
         var settings = Settings.Load();
+        Theme.Preference = Theme.Parse(settings.Theme);
         if (args.Length == 0) Startup.Ensure(settings.FirstRun); // test runs never touch the startup entry
         if (idleMinutes.HasValue) // not saved
         {

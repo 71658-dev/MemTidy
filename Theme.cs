@@ -6,7 +6,7 @@ namespace MemTidy;
 /// <summary>
 /// Colours and type from the MemTidy UI design (macOS 26 look): flat window surface, soft grouped fills,
 /// hairline separators, accent blue controls and the green / yellow / red pressure colours.
-/// Follows the Windows light/dark app setting; text colours keep at least 4.5:1 contrast on their surfaces.
+/// Follows the Windows light/dark app setting unless the user picked one in the tray menu; text colours keep at least 4.5:1 contrast on their surfaces.
 /// </summary>
 sealed record Palette(
     bool Dark,
@@ -47,12 +47,22 @@ static class Theme
 
     public static void Refresh() => current = Read();
 
-    /// <summary>Test switch --theme=dark|light; null follows Windows.</summary>
+    /// <summary>Switch --theme=dark|light (tests, and the elevated cache window); wins over <see cref="Preference"/>.</summary>
     public static bool? Forced { get; set; }
+
+    /// <summary>The user's choice from settings.json (true = dark); null follows Windows.</summary>
+    public static bool? Preference { get; set; }
+
+    /// <summary>"light" / "dark" / "system" as stored in settings.json.</summary>
+    public static bool? Parse(string? mode) => mode switch { "dark" => true, "light" => false, _ => null };
+
+    /// <summary>The switch that gives another MemTidy process the palette in use now.</summary>
+    public static string Arg => Current.Dark ? "--theme=dark" : "--theme=light";
 
     static Palette Read()
     {
-        if (Forced.HasValue) return Forced.Value ? Palette.DarkPalette : Palette.Light;
+        var dark = Forced ?? Preference;
+        if (dark.HasValue) return dark.Value ? Palette.DarkPalette : Palette.Light;
         try
         {
             using var k = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize");

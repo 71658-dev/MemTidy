@@ -20,7 +20,7 @@ sealed class TrayApp : ApplicationContext
     readonly Dictionary<string, Icon> icons = new();
     readonly System.Windows.Forms.Timer sampleTimer = new() { Interval = PressureMonitor.SampleSeconds * 1000 };
     readonly System.Windows.Forms.Timer cycleTimer = new() { Interval = 10_000 };
-    readonly ToolStripMenuItem pauseItem, startupItem;
+    readonly ToolStripMenuItem pauseItem, startupItem, appearanceItem;
     StatusForm? panel;
     Pressure lastLevel = Pressure.Green;
     bool restored;
@@ -36,12 +36,17 @@ sealed class TrayApp : ApplicationContext
 
         pauseItem = new ToolStripMenuItem("暫停自動整理", null, (_, _) => TogglePause()) { Checked = settings.Paused };
         startupItem = new ToolStripMenuItem("開機時自動啟動", null, (_, _) => ToggleStartup()) { Checked = Startup.Enabled };
+        appearanceItem = new ToolStripMenuItem("外觀");
+        foreach (var (mode, label) in new[] { ("system", "跟隨 Windows"), ("light", "淺色"), ("dark", "深色") })
+            appearanceItem.DropDownItems.Add(new ToolStripMenuItem(label, null, (_, _) => SetTheme(mode))
+                { Tag = mode, Checked = settings.Theme == mode, Padding = new Padding(2, 3, 2, 3) });
         var menu = new ContextMenuStrip();
         menu.Items.Add(new ToolStripMenuItem("開啟面板", null, (_, _) => ShowPanel()) { Font = new Font(menu.Font, FontStyle.Bold) });
         menu.Items.Add("立即整理閒置程式", null, (_, _) => TidyNow());
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(pauseItem);
         menu.Items.Add(startupItem);
+        menu.Items.Add(appearanceItem);
         menu.Items.Add("開啟設定資料夾", null, (_, _) => Settings.OpenFolder());
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("結束", null, (_, _) => ExitThread());
@@ -55,6 +60,13 @@ sealed class TrayApp : ApplicationContext
         foreach (ToolStripItem item in menu.Items)
             if (item is ToolStripMenuItem) item.Padding = new Padding(2, 3, 2, 3);
         menu.Opening += (_, _) => { Theme.Refresh(); Theme.RoundCorners(menu.Handle); };
+        var sub = (ToolStripDropDownMenu)appearanceItem.DropDown;
+        sub.Renderer = menu.Renderer;
+        sub.Font = Theme.Body;
+        sub.ShowImageMargin = false;
+        sub.ShowCheckMargin = true;
+        sub.Padding = menu.Padding;
+        sub.Opening += (_, _) => Theme.RoundCorners(sub.Handle);
 
         tray = new NotifyIcon { ContextMenuStrip = menu, Visible = true };
         // WinForms installs its UI context with the first control (the menu above): capture it only now.
@@ -155,6 +167,30 @@ sealed class TrayApp : ApplicationContext
         catch (Exception ex) { MessageBox.Show(ex.Message, "記憶體整理", MessageBoxButtons.OK, MessageBoxIcon.Warning); }
     }
 
+    void SetTheme(string mode)
+    {
+        settings.Theme = mode;
+        settings.Save();
+        foreach (ToolStripMenuItem item in appearanceItem.DropDownItems) item.Checked = (string)item.Tag! == mode;
+        Theme.Preference = Theme.Parse(mode);
+        bool wasDark = Theme.Current.Dark;
+        Theme.Refresh();
+        if (Theme.Current.Dark == wasDark) return;
+        // The windows take their colours when they are built: open ones are rebuilt in the new look, in place.
+        if (panel != null)
+        {
+            var bounds = panel.Bounds;
+            panel.Close();
+            ShowPanel();
+            panel!.Bounds = bounds;
+        }
+        if (cacheForm != null)
+        {
+            cacheForm.Close();
+            ShowCache();
+        }
+    }
+
     CacheForm? cacheForm;
 
     /// <summary>Test switch --snapshot=file.png: the panel renders itself to an image (works with a locked screen).</summary>
@@ -220,7 +256,7 @@ sealed class TrayApp : ApplicationContext
         {
             // Only the cache window runs elevated, as its own short-lived process, from the installed copy when there
             // is one; the tray copy keeps normal rights.
-            try { Startup.RunElevated("--cache-window")?.Dispose(); }
+            try { Startup.RunElevated($"--cache-window {Theme.Arg}")?.Dispose(); }
             catch (System.ComponentModel.Win32Exception) { } // user declined the UAC prompt
             return;
         }

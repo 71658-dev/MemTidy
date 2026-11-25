@@ -17,6 +17,8 @@ sealed class Settings
     public int MaxTrimsPerCycle { get; set; } = 5;
     public int MinTrimWorkingSetMB { get; set; } = 50;
     public bool Paused { get; set; }
+    /// <summary>Look of the panel and menu: "system" (follow the Windows app mode), "light" or "dark".</summary>
+    public string Theme { get; set; } = "system";
 
     /// <summary>True only when no settings file existed yet, i.e. the very first launch.</summary>
     [JsonIgnore] public bool FirstRun { get; private set; }
@@ -94,6 +96,11 @@ sealed class Settings
         TrimCooldownMinutes = Real(TrimCooldownMinutes, 1, 1440, 10, nameof(TrimCooldownMinutes));
         MaxTrimsPerCycle = Whole(MaxTrimsPerCycle, 0, 50, 5, nameof(MaxTrimsPerCycle));
         MinTrimWorkingSetMB = Whole(MinTrimWorkingSetMB, 1, 65536, 50, nameof(MinTrimWorkingSetMB));
+        if (Theme is not ("system" or "light" or "dark"))
+        {
+            Theme = "system";
+            corrected.Add(nameof(Theme));
+        }
         if (Exclusions is null)
         {
             Exclusions = new Settings().Exclusions;
